@@ -2,12 +2,9 @@
 // - injects audio-sink override + MAIN-world WebRTC hook
 // - universally detects "in a call" and offers a dismissible Record suggestion
 // - scrapes Google Meet captions (speaker names + timestamps)
-// - shows the user-only recording overlay (Stop + live captions)
+// - shows user-only recording overlay (with auto-hide for clean video recordings)
 (function () {
   'use strict';
-
-  // inject.js + inject-webrtc.js now run as MAIN-world content scripts declared in
-  // manifest.json at document_start — early enough to catch Teams' audio routing.
 
   const PLATFORMS = { GOOGLE_MEET: 'google_meet', ZOOM: 'zoom', MS_TEAMS: 'ms_teams', UNKNOWN: 'unknown' };
   function detectPlatform() {
@@ -35,7 +32,7 @@
     if (e.data.type === 'MIC_PERMISSION_GRANTED') chrome.runtime.sendMessage({ action: 'MIC_READY' }).catch(() => {});
   });
 
-  // ---- universal meeting detection (content-blind: structure only) ----
+  // ---- universal meeting detection ----
   const MEETING_HOSTS = [/(^|\.)meet\.google\.com$/, /(^|\.)zoom\.us$/, /(^|\.)teams\.(microsoft|live)\.com$/, /(^|\.)webex\.com$/, /(^|\.)whereby\.com$/, /(^|\.)zoho\.com$/, /(^|\.)around\.co$/, /(^|\.)jit\.si$/, /^8x8\.vc$/, /(^|\.)bluejeans\.com$/, /(^|\.)gotomeeting\.com$/, /(^|\.)goto\.com$/, /(^|\.)gather\.town$/, /(^|\.)chime\.aws$/, /(^|\.)daily\.co$/, /(^|\.)dialpad\.com$/, /(^|\.)ringcentral\.com$/, /^discord\.com$/, /^app\.slack\.com$/];
   const STRONG_PATH = /\/(j|wc|s|meetup-join|meet|webappng|wbxmjs|huddle|call|room)\b|\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i;
   const LEAVE_RE = /leave|hang ?up|end (call|meeting)|disconnect|leave huddle/i;
@@ -69,7 +66,7 @@
     if (suggestShown || dismissedFor === roomKey() || document.getElementById('ghost-suggest')) return;
     suggestShown = true;
     const host = document.createElement('div'); host.id = 'ghost-suggest';
-    host.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:2147483647;'; // top-center: clear of bottom control bars
+    host.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:2147483647;';
     document.body.appendChild(host);
     const sh = host.attachShadow({ mode: 'closed' });
     sh.innerHTML = `<style>
@@ -86,7 +83,7 @@
       injectMicIframe();
       chrome.runtime.sendMessage({ action: 'START_CAPTURE' }, (res) => {
         if (!res || !res.success) toast('Click the Ghost Recorder toolbar icon to start recording.');
-        else if (!res.hasKey) toast('Recording — but add your ' + (res.provider || 'AI') + ' API key in Settings to get notes.');
+        else if (!res.hasKey && res.provider !== 'local' && res.provider !== 'chrome_ai') toast('Recording — but add your ' + (res.provider || 'AI') + ' API key in Settings to get notes.');
       });
     };
     sh.getElementById('n').onclick = () => {
@@ -106,10 +103,10 @@
       if (settings && settings.autoSuggest === false) return;
       if (isRecording) return;
       const d = (gr_dismiss || {})[location.host];
-      if (d && (Date.now() - d) < 8 * 3600 * 1000) return; // dismissed for this site in the last 8h
+      if (d && (Date.now() - d) < 8 * 3600 * 1000) return;
       const tick = () => {
         if (detectMeeting()) { showSuggest(); return; }
-        if (detectTries++ < 40) detectTimer = setTimeout(tick, 2500); // ~100s of polling then stop
+        if (detectTries++ < 40) detectTimer = setTimeout(tick, 2500);
       };
       tick();
     });
@@ -118,14 +115,14 @@
   else window.addEventListener('DOMContentLoaded', watchForMeeting);
 
   // ---- recording overlay (Shadow DOM) ----
-  let shadow = null, panel = null, transcriptBox = null;
+  let shadow = null, panel = null, transcriptBox = null, hostEl = null;
   const overlayLines = [];
   function createUI() {
     if (document.getElementById('ghost-recorder-ui')) return;
-    const host = document.createElement('div'); host.id = 'ghost-recorder-ui';
-    host.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;';
-    document.body.appendChild(host);
-    shadow = host.attachShadow({ mode: 'closed' });
+    hostEl = document.createElement('div'); hostEl.id = 'ghost-recorder-ui';
+    hostEl.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:2147483647;';
+    document.body.appendChild(hostEl);
+    shadow = hostEl.attachShadow({ mode: 'closed' });
     shadow.innerHTML = `<style>
       .panel{background:rgba(15,23,42,.92);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#fff;font-family:'Segoe UI',sans-serif;width:320px;box-shadow:0 10px 25px rgba(0,0,0,.5);overflow:hidden;display:none;flex-direction:column;}
       .header{padding:10px 15px;background:rgba(255,255,255,.06);font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;cursor:move;user-select:none;}
@@ -134,17 +131,18 @@
       .stop{margin-left:auto;background:#ef4444;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-weight:700;cursor:pointer;font-size:12px;}
       .pause{background:#334155;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-weight:700;cursor:pointer;font-size:12px;}
       .min{background:transparent;color:#94a3b8;border:0;font-weight:700;cursor:pointer;font-size:14px;padding:2px 6px;}
+      .cls{background:transparent;color:#fca5a5;border:0;font-weight:700;cursor:pointer;font-size:14px;padding:2px 6px;}
       .bubble{display:none;width:30px;height:30px;border-radius:50%;background:rgba(15,23,42,.85);border:2px solid #ef4444;align-items:center;justify-content:center;cursor:pointer;font-size:15px;box-shadow:0 4px 14px rgba(0,0,0,.4);animation:p 2s infinite;}
       .content{padding:12px 15px;max-height:200px;overflow-y:auto;font-size:13px;line-height:1.5;color:#cbd5e1;white-space:pre-wrap;}
       .hint{font-size:11px;color:#64748b;padding:0 15px 10px;}
       @keyframes p{0%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 6px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}</style>
       <div class="bubble" id="bubble" title="Ghost Recorder — recording. Click to expand.">👻</div>
-      <div class="panel" id="panel"><div class="header" id="hdr"><div class="dot" id="dot"></div>Ghost AI Notes<span class="time" id="tm">00:00</span><button class="pause" id="pause">⏸</button><button class="stop" id="stop">Stop</button><button class="min" id="min" title="Minimize — keeps the overlay out of the recording">—</button></div>
-      <div class="content" id="t">Listening… AI transcribes the full audio — CC only adds speaker names.</div><div class="hint" id="aud"></div><div class="hint" id="mic"></div><div class="hint" id="h"></div></div>`;
+      <div class="panel" id="panel"><div class="header" id="hdr"><div class="dot" id="dot"></div>Ghost AI Notes<span class="time" id="tm">00:00</span><button class="pause" id="pause">⏸</button><button class="stop" id="stop">Stop</button><button class="min" id="min" title="Minimize">—</button><button class="cls" id="cls" title="Remove overlay from video recording">✕</button></div>
+      <div class="content" id="t">Listening… AI transcribes full audio.</div><div class="hint" id="aud"></div><div class="hint" id="mic"></div><div class="hint" id="h"></div></div>`;
     panel = shadow.getElementById('panel'); transcriptBox = shadow.getElementById('t');
     shadow.getElementById('stop').onclick = () => {
       chrome.runtime.sendMessage({ action: 'STOP_CAPTURE' });
-      toast('✓ Recording saved — AI is writing your notes. Open them via the Ghost Recorder icon → 📋 Meetings.');
+      toast('✓ Recording saved — AI is writing your notes.');
     };
     let paused = false, pausedAtMs = 0;
     shadow.getElementById('pause').onclick = () => {
@@ -156,8 +154,6 @@
       else { startMs += Date.now() - pausedAtMs; startOverlayTimer(); }
       setHint(paused ? 'Paused — nothing is being recorded.' : '');
     };
-    // Minimize to a tiny dot — the overlay is part of the page, so it appears in
-    // the recorded video; minimized keeps recordings clean. State remembered.
     const bubble = shadow.getElementById('bubble');
     const setMin = (min) => {
       panel.style.display = min ? 'none' : 'flex';
@@ -165,20 +161,22 @@
       chrome.storage.local.set({ gr_overlay_min: min });
     };
     shadow.getElementById('min').onclick = () => setMin(true);
+    shadow.getElementById('cls').onclick = () => {
+      if (hostEl) hostEl.style.display = 'none';
+      toast('Overlay hidden for clean video. Control recording via toolbar icon.');
+    };
     bubble.onclick = () => setMin(false);
-    chrome.storage.local.get('gr_overlay_min', ({ gr_overlay_min }) => { if (gr_overlay_min) setMin(true); });
 
-    // Draggable: the overlay must never be stuck covering meeting controls.
     const hdr = shadow.getElementById('hdr');
     hdr.addEventListener('mousedown', (e) => {
-      if (e.target.id === 'stop') return;
+      if (e.target.id === 'stop' || e.target.id === 'pause' || e.target.id === 'min' || e.target.id === 'cls') return;
       e.preventDefault();
-      const r = host.getBoundingClientRect();
+      const r = hostEl.getBoundingClientRect();
       const dx = e.clientX - r.left, dy = e.clientY - r.top;
       const move = (ev) => {
-        host.style.left = Math.max(0, Math.min(window.innerWidth - r.width, ev.clientX - dx)) + 'px';
-        host.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy)) + 'px';
-        host.style.right = 'auto'; host.style.bottom = 'auto';
+        hostEl.style.left = Math.max(0, Math.min(window.innerWidth - r.width, ev.clientX - dx)) + 'px';
+        hostEl.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy)) + 'px';
+        hostEl.style.right = 'auto'; hostEl.style.bottom = 'auto';
       };
       const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
       window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -194,63 +192,46 @@
   }
   function stopOverlayTimer() { if (overlayTimer) { clearInterval(overlayTimer); overlayTimer = null; } }
   function setHint(t) { if (shadow) { const h = shadow.getElementById('h'); if (h) h.textContent = t; } }
-  function showOverlayLine(line) { if (!transcriptBox) return; overlayLines.push(line); while (overlayLines.length > 6) overlayLines.shift(); transcriptBox.textContent = overlayLines.join('\n'); transcriptBox.scrollTop = transcriptBox.scrollHeight; }
 
   // ---- Google Meet caption scraper ----
   let captionObserver = null, startMs = 0; const finalized = new Map();
-  function mmss() { const s = Math.max(0, Math.floor((Date.now() - startMs) / 1000)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
-  function tryEnableCaptions() {
-    if (platform !== PLATFORMS.GOOGLE_MEET) return; // auto-clicking menus on Teams/Zoom is too risky
-    const b = document.querySelector('button[aria-label*="aptions" i],button[aria-label*="ubtitle" i]');
-    if (b && /turn on|enable|off/i.test(b.getAttribute('aria-label') || '')) { try { b.click(); } catch (e) { /* */ } }
+  function fmtTs(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : String(m).padStart(2, '0')) + ':' + String(s).padStart(2, '0');
   }
-  function findCaptionRegion() {
-    if (platform === PLATFORMS.MS_TEAMS) {
-      return document.querySelector('[data-tid*="closed-caption" i]') || document.querySelector('[class*="closed-caption" i]') || document.querySelector('[class*="ClosedCaption"]');
-    }
-    if (platform === PLATFORMS.ZOOM) {
-      return document.querySelector('#live-transcription-subtitle') || document.querySelector('[class*="live-transcription" i]') || document.querySelector('[aria-label*="captions" i]');
-    }
-    return document.querySelector('[role="region"][aria-label*="aptions" i]') || document.querySelector('div[aria-label*="aptions" i]') || document.querySelector('.a4cQT');
-  }
-  function scrapeRegion(region) {
-    const rows = region.querySelectorAll(':scope > div, [data-message-id], .nMcdL, .TBMuR');
-    (rows.length ? rows : [region]).forEach((row) => {
-      const img = row.querySelector('img');
-      let speaker = ((img && img.alt) || ((row.querySelector('.zs7s8d, .KcIKyf, [data-self-name]') || {}).textContent) || '').trim();
-      let text = '';
-      row.querySelectorAll('div,span').forEach((el) => { const t = (el.textContent || '').trim(); if (t && t !== speaker && t.length > text.length) text = t; });
-      if (!text) text = (row.textContent || '').trim();
-      if (speaker && text.startsWith(speaker)) text = text.slice(speaker.length).trim();
-      if (!text || text.length < 2) return;
-      if (!row.dataset.ghostKey) row.dataset.ghostKey = String(row.offsetTop) + ':' + speaker;
-      const key = row.getAttribute('data-message-id') || row.dataset.ghostKey;
-      clearTimeout(row.__ghostT);
-      row.__ghostT = setTimeout(() => {
-        if (finalized.get(key) === text) return;
-        finalized.set(key, text);
-        const line = `[${mmss()}] ${speaker || 'Speaker'}: ${text}`;
-        chrome.runtime.sendMessage({ action: 'CAPTION', line }).catch(() => {});
-        showOverlayLine(line);
-      }, 1200);
-    });
+  function saveCaptionLine(speaker, text) {
+    if (!text) return;
+    const line = `[${fmtTs(Date.now() - startMs)}] ${speaker}: ${text}`;
+    chrome.runtime.sendMessage({ action: 'APPEND_CAPTION', line }).catch(() => {});
   }
   function startCaptionScraper() {
-    if (platform === PLATFORMS.UNKNOWN) { setHint('AI transcribes the audio; speaker names come from voices.'); return; }
-    tryEnableCaptions(); let tries = 0;
+    stopCaptionScraper(); finalized.clear();
     const tick = () => {
-      const region = findCaptionRegion();
-      if (region) { captionObserver = new MutationObserver(() => scrapeRegion(region)); captionObserver.observe(region, { childList: true, subtree: true, characterData: true }); scrapeRegion(region); setHint('Captions connected — real speaker names on.'); return; }
-      if (tries++ < 20) { tryEnableCaptions(); setTimeout(tick, 2500); } else setHint('Turn on captions/CC for real speaker names (AI still transcribes the audio).');
+      const container = document.querySelector('#live-transcription-subtitle') || document.querySelector('[class*="live-transcription" i]') || document.querySelector('[aria-label*="captions" i]');
+      if (!container) return;
+      captionObserver = new MutationObserver(() => {
+        try {
+          const blocks = container.querySelectorAll('[class*="subtitle" i], [class*="caption" i], div');
+          blocks.forEach((b, idx) => {
+            const spEl = b.querySelector('strong, [class*="name" i], [class*="speaker" i]');
+            const txtEl = b.querySelector('span:last-child, p') || b;
+            const speaker = (spEl ? spEl.textContent : 'Speaker').trim() || 'Speaker';
+            const text = (txtEl ? txtEl.textContent : b.textContent).replace(speaker, '').trim();
+            if (text.length > 5) {
+              const key = `${speaker}-${idx}`;
+              if (finalized.get(key) !== text) { finalized.set(key, text); saveCaptionLine(speaker, text); }
+            }
+          });
+        } catch (e) { /* */ }
+      });
+      captionObserver.observe(container, { childList: true, subtree: true, characterData: true });
     };
-    tick();
+    setTimeout(tick, 3000);
   }
-  function stopCaptionScraper() { if (captionObserver) { captionObserver.disconnect(); captionObserver = null; } finalized.clear(); }
+  function stopCaptionScraper() { if (captionObserver) { captionObserver.disconnect(); captionObserver = null; } }
 
-  // ---- meeting-mute mirror -------------------------------------------------
-  // If you're muted IN the call, the recording should not carry your voice
-  // either. Poll the platform's own mute control (cheap, 1.5s) and report
-  // changes; the recorder zeroes the mic gain while muted.
+  // ---- meeting-mute mirror ----
   let muteTimer = null, lastMuteState = null;
   function platformMuted() {
     try {
@@ -267,40 +248,53 @@
         const b = document.querySelector('button[aria-label*="udio"], .join-audio-container button');
         if (b) { const al = b.getAttribute('aria-label') || ''; if (/unmute/i.test(al)) return true; if (/^mute/i.test(al)) return false; }
       }
-      // Generic fallback: any control whose accessible name is exactly "Unmute…"
       const g = document.querySelector('button[aria-label^="Unmute" i], button[aria-label^="Unmute microphone" i]');
       if (g) return true;
-    } catch (e) { /* selector churn — stay silent */ }
-    return null; // unknown
+    } catch (e) { /* */ }
+    return null;
   }
   function startMuteWatch() {
-    stopMuteWatch();
-    lastMuteState = null;
+    stopMuteWatch(); lastMuteState = null;
     muteTimer = setInterval(() => {
       const m = platformMuted();
       if (m === null || m === lastMuteState) return;
       lastMuteState = m;
       chrome.runtime.sendMessage({ action: 'MEETING_MUTE', muted: m, source: 'meeting' }).catch(() => {});
-      if (shadow) { const mi = shadow.getElementById('mic'); if (mi && m) { mi.textContent = '🔇 Muted in meeting — your voice is NOT being recorded'; mi.style.color = '#fbbf24'; } else if (mi && !m) { mi.textContent = '🎤 Your voice: recording'; mi.style.color = '#34d399'; } }
+      if (shadow) { const mi = shadow.getElementById('mic'); if (mi && m) { mi.textContent = '🔇 Muted in meeting — voice NOT recorded'; mi.style.color = '#fbbf24'; } else if (mi && !m) { mi.textContent = '🎤 Your voice: recording'; mi.style.color = '#34d399'; } }
     }, 1500);
   }
   function stopMuteWatch() { if (muteTimer) { clearInterval(muteTimer); muteTimer = null; } }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'SHOW_UI') {
-      startMs = Date.now(); createUI(); injectMicIframe(); startOverlayTimer(); startCaptionScraper(); startMuteWatch();
-      chrome.storage.local.get('gr_overlay_min', ({ gr_overlay_min }) => {
-        if (!shadow) return;
-        const b = shadow.getElementById('bubble');
-        if (gr_overlay_min && b) { b.style.display = 'flex'; if (panel) panel.style.display = 'none'; }
-        else if (panel) panel.style.display = 'flex';
+      chrome.storage.local.get('settings', ({ settings }) => {
+        const s = settings || {};
+        const mode = s.overlayMode || 'hide_on_video';
+        const isVid = s.videoEnabled !== false;
+
+        startMs = Date.now(); injectMicIframe(); startCaptionScraper(); startMuteWatch();
+
+        if (mode === 'disabled' || (mode === 'hide_on_video' && isVid)) {
+          toast('Recording meeting (video clean) — pause/stop anytime via Ghost Recorder toolbar icon.');
+        } else {
+          createUI(); startOverlayTimer();
+          if (hostEl) hostEl.style.display = 'block';
+          chrome.storage.local.get('gr_overlay_min', ({ gr_overlay_min }) => {
+            if (!shadow) return;
+            const b = shadow.getElementById('bubble');
+            if ((mode === 'minimized' || gr_overlay_min) && b) { b.style.display = 'flex'; if (panel) panel.style.display = 'none'; }
+            else if (panel) panel.style.display = 'flex';
+          });
+        }
+        const sg = document.getElementById('ghost-suggest'); if (sg) sg.remove();
+        sendResponse({ success: true });
       });
-      const sg = document.getElementById('ghost-suggest'); if (sg) sg.remove();
-      sendResponse({ success: true });
+      return true;
     } else if (request.action === 'HIDE_UI') {
       stopCaptionScraper(); stopOverlayTimer(); stopMuteWatch();
       if (panel) panel.style.display = 'none';
       if (shadow) { const b = shadow.getElementById('bubble'); if (b) b.style.display = 'none'; }
+      if (hostEl) hostEl.style.display = 'none';
       sendResponse({ success: true });
     } else if (request.action === 'MIC_STATUS') {
       if (shadow) { const m = shadow.getElementById('mic'); if (m) { m.textContent = request.connected ? '🎤 Your voice: recording' : '⚠ Your voice NOT captured — Enable mic in Settings'; m.style.color = request.connected ? '#34d399' : '#fca5a5'; } }

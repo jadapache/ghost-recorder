@@ -1,8 +1,9 @@
-﻿const startBtn = document.getElementById('startBtn');
+const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('statusText');
 const timer = document.getElementById('timer');
 const videoToggle = document.getElementById('videoToggle');
+const modeSelect = document.getElementById('modeSelect');
 const dashLink = document.getElementById('dashLink');
 const settingsLink = document.getElementById('settingsLink');
 
@@ -11,20 +12,26 @@ let timerInterval = null;
 dashLink.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') }); };
 settingsLink.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); };
 
-// Mic status — your voice is only recorded if mic is granted to the extension origin.
+// Mic status — your voice is recorded in Call Mode if mic is granted.
 const micStatus = document.getElementById('micStatus');
-try {
-  navigator.permissions.query({ name: 'microphone' }).then((p) => {
-    const render = () => {
-      if (p.state === 'granted') { micStatus.innerHTML = '🎤 Mic enabled — your voice is recorded'; micStatus.style.color = '#34d399'; }
-      else { micStatus.innerHTML = '🎤 <a href="#" id="micLink" style="color:#fbbf24">Enable mic</a> to record your voice'; const l = document.getElementById('micLink'); if (l) l.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); }; }
-    };
-    render(); p.onchange = render;
-  }).catch(() => {});
-} catch (e) { /* permissions API unavailable */ }
+function updateMicNotice() {
+  if (!micStatus) return;
+  if (modeSelect.value === 'system_only') {
+    micStatus.innerHTML = '🔊 System audio only mode — mic is disabled';
+    micStatus.style.color = '#94a3b8';
+    return;
+  }
+  try {
+    navigator.permissions.query({ name: 'microphone' }).then((p) => {
+      const render = () => {
+        if (p.state === 'granted') { micStatus.innerHTML = '🎤 Mic enabled — your voice is recorded'; micStatus.style.color = '#34d399'; }
+        else { micStatus.innerHTML = '🎤 <a href="#" id="micLink" style="color:#fbbf24">Enable mic</a> to record your voice'; const l = document.getElementById('micLink'); if (l) l.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); }; }
+      };
+      render(); p.onchange = render;
+    }).catch(() => {});
+  } catch (e) { /* permissions API unavailable */ }
+}
 
-// Show WHICH tab will be recorded (and block unrecordable browser pages) so the
-// user never silently records the wrong thing.
 const tabInfo = document.getElementById('tabInfo');
 const UNRECORDABLE = /^(chrome|edge|about|devtools|view-source|chrome-extension):|^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com)/i;
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
@@ -41,27 +48,41 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   });
 });
 
-// Restore recording state + the video preference (stored in settings).
 chrome.storage.local.get(['isRecording', 'startTime', 'settings'], (result) => {
   const s = result.settings || {};
+  if (self.GhostI18n) {
+    self.GhostI18n.setLanguage(s.language || 'auto');
+    self.GhostI18n.translatePage();
+  }
   if (result.isRecording) { setRecordingUI(); startTimer(result.startTime); }
   else {
     const prov = s.provider || 'gemini';
-    const key = prov === 'custom' ? (s.keys && s.keys.custom) : (s.keys && s.keys[prov]);
+    const isLocal = prov === 'local' || prov === 'chrome_ai';
+    const key = isLocal ? 'local-ok' : (prov === 'custom' ? (s.keys && s.keys.custom) : (s.keys && s.keys[prov]));
     if (!key) {
       statusText.innerHTML = 'First, <a href="#" id="setupLink" style="color:#38bdf8">add your AI key in Settings</a>.';
       const l = document.getElementById('setupLink'); if (l) l.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); };
     }
   }
   videoToggle.checked = (s.videoEnabled !== false);
+  if (modeSelect) modeSelect.value = s.recordMode || 'call';
+  updateMicNotice();
 });
 
-// Persist the video toggle into settings (shared with the options page + background).
 videoToggle.addEventListener('change', () => {
   chrome.storage.local.get('settings', ({ settings }) => {
     chrome.storage.local.set({ settings: Object.assign({ videoEnabled: true }, settings || {}, { videoEnabled: videoToggle.checked }) });
   });
 });
+
+if (modeSelect) {
+  modeSelect.addEventListener('change', () => {
+    chrome.storage.local.get('settings', ({ settings }) => {
+      chrome.storage.local.set({ settings: Object.assign({ recordMode: 'call' }, settings || {}, { recordMode: modeSelect.value }) });
+      updateMicNotice();
+    });
+  });
+}
 
 startBtn.onclick = async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -72,7 +93,7 @@ startBtn.onclick = async () => {
       const now = Date.now();
       chrome.storage.local.set({ startTime: now });
       startTimer(now);
-      if (!response.hasKey) {
+      if (!response.hasKey && response.provider !== 'local' && response.provider !== 'chrome_ai') {
         statusText.innerHTML = '⚠ Recording — but add your <a href="#" id="setupLink" style="color:#fbbf24">' + (response.provider || 'AI') + ' key in Settings</a> to get notes.';
         const l = document.getElementById('setupLink'); if (l) l.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); };
       }
@@ -102,34 +123,23 @@ pauseBtn.onclick = () => {
 };
 
 function setRecordingUI() {
-  tabInfo.textContent = '';
-  startBtn.style.display = 'none';
-  recRow.style.display = 'flex';
-  videoToggle.disabled = true;
+  startBtn.style.display = 'none'; recRow.style.display = 'flex';
   timer.style.display = 'block';
   statusText.innerHTML = '<span class="pulse"></span> Recording meeting...';
-  chrome.runtime.sendMessage({ action: 'GET_STATE' }, (s) => {
-    if (s && s.pausedAt) { popupPaused = true; pauseBtn.textContent = '▶ Resume'; statusText.innerHTML = '⏸ Paused'; if (timerInterval) clearInterval(timerInterval); }
-  });
 }
-
 function setStoppedUI() {
-  startBtn.style.display = 'block';
-  recRow.style.display = 'none';
-  popupPaused = false; pauseBtn.textContent = '⏸ Pause';
-  videoToggle.disabled = false;
+  startBtn.style.display = 'block'; recRow.style.display = 'none';
   timer.style.display = 'none';
-  statusText.innerText = 'Saved. AI is writing notes — see 📋 Meetings.';
+  statusText.innerText = 'Recording saved — generating notes…';
 }
 
 function startTimer(startTime) {
   if (timerInterval) clearInterval(timerInterval);
-  const tick = () => {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
-    const secs = String(elapsed % 60).padStart(2, '0');
-    timer.textContent = `${mins}:${secs}`;
+  const updateTimer = () => {
+    const elapsedSec = Math.floor((Date.now() - (startTime || Date.now())) / 1000);
+    const m = Math.floor(elapsedSec / 60); const s = elapsedSec % 60;
+    timer.innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
-  tick();
-  timerInterval = setInterval(tick, 1000);
+  updateTimer();
+  timerInterval = setInterval(updateTimer, 1000);
 }

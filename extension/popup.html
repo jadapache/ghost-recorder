@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Ghost Recorder</title>
+    <title data-i18n="app_name">Ghost Recorder</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -27,6 +27,7 @@
             background: #fff; border-radius: 50%; transition: .25s; }
         input:checked + .slider { background: #2563eb; }
         input:checked + .slider:before { transform: translateX(19px); }
+        select { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 8px; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; font-size: .82rem; }
         .btn { padding: 13px; border: none; border-radius: 10px; font-weight: 700; font-size: .95rem; cursor: pointer; transition: .2s; width: 100%; }
         .btn-start { background: linear-gradient(135deg, #2563eb, #4f46e5); color: #fff; }
         .btn-start:hover { filter: brightness(1.12); box-shadow: 0 4px 18px rgba(59,99,235,.35); }
@@ -49,32 +50,41 @@
     <div class="head">
         <div class="logo">👻</div>
         <div>
-            <h1>Ghost Recorder</h1>
-            <div class="sub">AI meeting notes — any platform</div>
+            <h1 data-i18n="app_name">Ghost Recorder</h1>
+            <div class="sub" data-i18n="popup_sub">AI meeting notes — any platform</div>
         </div>
     </div>
     <div class="body">
-        <div class="card toggle-row">
-            <label>Record video</label>
-            <label class="switch">
-                <input type="checkbox" id="videoToggle" checked>
-                <span class="slider"></span>
-            </label>
+        <div class="card" style="display:flex;flex-direction:column;gap:8px">
+            <div class="toggle-row">
+                <label data-i18n="record_video">Record video</label>
+                <label class="switch">
+                    <input type="checkbox" id="videoToggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div>
+                <select id="modeSelect">
+                    <option value="call" data-i18n="rec_mode_call">📞 Call Mode (Both sides)</option>
+                    <option value="system_only" data-i18n="rec_mode_system">🔊 System Audio Only (Webinar/Podcast)</option>
+                </select>
+            </div>
         </div>
         <div id="timer" class="timer">00:00</div>
         <div id="tabInfo"></div>
-        <button id="startBtn" class="btn btn-start">● Start Recording</button>
+        <button id="startBtn" class="btn btn-start" data-i18n="start_recording">● Start Recording</button>
         <div id="recRow" style="display:none;gap:8px">
-            <button id="pauseBtn" class="btn" style="flex:1;background:#334155;color:#fff">⏸ Pause</button>
-            <button id="stopBtn" class="btn btn-stop" style="flex:2;display:block">■ Stop</button>
+            <button id="pauseBtn" class="btn" style="flex:1;background:#334155;color:#fff" data-i18n="pause_recording">⏸ Pause</button>
+            <button id="stopBtn" class="btn btn-stop" style="flex:2;display:block" data-i18n="stop_recording">■ Stop</button>
         </div>
-        <div id="statusText" class="status">Ready to capture this meeting</div>
+        <div id="statusText" class="status" data-i18n="ready_status">Ready to capture this meeting</div>
         <div id="micStatus" class="status"></div>
     </div>
     <div class="links">
-        <a id="dashLink" href="#">📋 Meetings</a>
-        <a id="settingsLink" href="#">⚙ Settings</a>
+        <a id="dashLink" href="#" data-i18n="meetings">📋 Meetings</a>
+        <a id="settingsLink" href="#" data-i18n="settings">⚙ Settings</a>
     </div>
+    <script src="i18n.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

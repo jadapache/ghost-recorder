@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Ghost Recorder — Meetings</title>
+  <title data-i18n="meetings_title">Ghost Recorder — Meetings</title>
   <style>
     * { box-sizing: border-box; }
     :root { --bg:#0d0f13; --panel:#15181e; --panel2:#1b1f27; --line:#262b35; --text:#e7eaf0; --mut:#8b93a3; --acc:#38bdf8; --acc2:#6366f1; }
@@ -48,65 +48,38 @@
     .btn.mini { padding: 3px 9px; font-size: .76rem; vertical-align: middle; }
     .btn.selbtn { background: var(--acc2); border-color: var(--acc2); }
     .vid { width: 100%; max-height: 62vh; border-radius: 12px; background: #000; outline: none; }
-    /* Meeting view = Fathom-style split: video column left (never moves), tabs
-       column right at FULL height — only the tab content scrolls, inside itself. */
     .detail.fixed { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px; overflow: hidden; }
     .mv-left { min-width: 0; min-height: 0; overflow-y: auto; }
     .mv-right { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     .mv-right .tabs { flex: none; margin-top: 0; }
     .mv-right #tabc { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 2px 2px 8px; }
-    /* Ask tab: chat grows, input row stays pinned at the bottom of the pane. */
     .mv-right #tabc.askpane { display: flex; flex-direction: column; overflow: hidden; }
     .mv-right #tabc.askpane .chat { flex: 1 1 0; max-height: none; min-height: 0; }
-    @media (max-width: 1000px) {
-      .detail.fixed { display: block; overflow-y: auto; }
-      .vid { max-height: 40vh; }
-    }
-    .speed { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; font-size: .78rem; color: var(--mut); }
-    .spd.on { background: #2563eb; border-color: #2563eb; }
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 14px 0 16px; }
-    .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--mut); font-weight: 700; font-size: .82rem; letter-spacing: .6px; padding: 10px 14px; cursor: pointer; }
-    .tab:hover { color: var(--text); }
-    .tab.on { color: var(--acc); border-bottom-color: var(--acc); }
-    .attend { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 10px; }
-    .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 4px 12px; font-size: .76rem; color: var(--text); }
-    .regenbar { display: flex; align-items: center; gap: 10px; background: rgba(99,102,241,.09); border: 1px solid rgba(99,102,241,.25); border-radius: 10px; padding: 10px 14px; margin: 4px 0 14px; font-size: .84rem; flex-wrap: wrap; }
-    .regenbar select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; font-size: .82rem; }
-    .notes h2 { color: var(--acc); border-bottom: 1px solid var(--line); padding-bottom: 5px; margin-top: 22px; font-size: 1rem; }
-    .notes h3 { color: #7dd3fc; font-size: .92rem; }
-    .notes blockquote { border-left: 3px solid var(--acc2); margin: 8px 0; padding: 6px 12px; color: var(--mut); background: var(--panel); border-radius: 0 8px 8px 0; font-size: .85rem; }
-    .notes table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-    .notes th, .notes td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; font-size: .85rem; }
-    .notes th { background: var(--panel2); }
-    .notes ul, .notes ol { padding-left: 20px; } .notes li { margin: 4px 0; line-height: 1.5; }
-    .notes p { line-height: 1.55; font-size: .9rem; }
-    .transcript { border: 1px solid var(--line); border-radius: 10px; padding: 6px 4px; background: var(--panel); }
-    .transcript.tall { max-height: none; }
-    .tl { display: flex; gap: 9px; padding: 6px 10px; border-radius: 7px; cursor: pointer; font-size: .86rem; line-height: 1.45; align-items: baseline; }
-    .tl:hover { background: rgba(56,189,248,.07); }
-    .tl.on { background: rgba(56,189,248,.15); }
-    .tl.plain { cursor: default; color: var(--mut); }
-    .tstamp { color: var(--acc); font-variant-numeric: tabular-nums; font-size: .74rem; flex: none; font-weight: 600; }
-    .spk { color: #a5b4fc; font-weight: 600; flex: none; }
-    .ttext { color: #cbd5e1; }
-    .askhead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .chat { min-height: 180px; max-height: 42vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 2px; }
-    .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; font-size: .88rem; line-height: 1.5; }
-    .msg.user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
-    .msg.ai { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-    .msg.ai h2, .msg.ai h3 { font-size: .9rem; color: var(--acc); margin: 6px 0 2px; }
-    .msg.ai ul, .msg.ai ol { padding-left: 18px; margin: 4px 0; }
-    .msg.ai p { margin: 4px 0; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-    .chipbtn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 16px; padding: 7px 13px; font-size: .78rem; cursor: pointer; }
-    .chipbtn:hover { border-color: var(--acc); color: var(--acc); }
-    .askrow { display: flex; gap: 8px; margin-top: 6px; }
-    .askrow input { flex: 1; background: var(--panel2); border: 1px solid var(--line); border-radius: 22px; color: var(--text); padding: 11px 18px; font-size: .88rem; outline: none; }
+    .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 16px 0 12px; }
+    .tab { padding: 8px 14px; font-size: .84rem; font-weight: 600; color: var(--mut); cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab.sel { color: var(--acc); border-bottom-color: var(--acc); }
+    .notes { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; font-size: .9rem; line-height: 1.6; }
+    .notes h1 { font-size: 1.25rem; margin-top: 0; }
+    .notes h2 { font-size: 1.05rem; margin-top: 18px; border-bottom: 1px solid var(--line); padding-bottom: 6px; color: var(--acc); }
+    .notes h3 { font-size: .95rem; margin-top: 14px; }
+    .notes ul, .notes ol { padding-left: 20px; }
+    .notes blockquote { margin: 12px 0; padding: 8px 14px; background: rgba(56,189,248,.07); border-left: 3px solid var(--acc); border-radius: 4px; font-style: italic; }
+    .notes input[type=checkbox] { margin-right: 6px; accent-color: var(--acc); }
+    .warn { background: rgba(217,119,6,.1); border: 1px solid rgba(217,119,6,.3); color: #fcd34d; padding: 10px 14px; border-radius: 9px; font-size: .83rem; margin-bottom: 12px; }
+    .err { background: rgba(220,38,38,.1); border: 1px solid rgba(220,38,38,.3); color: #fca5a5; padding: 12px 14px; border-radius: 9px; font-size: .85rem; margin-bottom: 12px; }
+    .tline { padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: .86rem; display: flex; gap: 10px; line-height: 1.4; transition: .1s; }
+    .tline:hover { background: var(--panel2); }
+    .tline .ts { color: var(--acc); font-family: monospace; font-size: .78rem; flex: none; width: 48px; }
+    .tline .sp { font-weight: 600; color: #a5b4fc; flex: none; min-width: 80px; }
+    .tline .tx { color: var(--text); flex: 1; }
+    .chat { display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding-right: 4px; }
+    .msg { padding: 10px 14px; border-radius: 12px; font-size: .87rem; line-height: 1.5; max-width: 90%; }
+    .msg.u { background: #2563eb; color: #fff; align-self: flex-end; border-bottom-right-radius: 3px; }
+    .msg.a { background: var(--panel2); border: 1px solid var(--line); align-self: flex-start; border-bottom-left-radius: 3px; }
+    .askrow { display: flex; gap: 8px; margin-top: 10px; }
+    .askrow input { flex: 1; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 10px 14px; font-size: .87rem; outline: none; }
     .askrow input:focus { border-color: var(--acc); }
-    .askrow .btn { border-radius: 50%; width: 42px; height: 42px; font-size: 1rem; padding: 0; }
-    .err { color: #fca5a5; white-space: pre-wrap; background: #2a1414; border-radius: 8px; padding: 12px; font-size: .86rem; }
-    .err.warnbox { background: #322708; color: #fcd34d; margin-bottom: 10px; }
-    .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--acc); border-radius: 50%; animation: sp 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: sp .6s linear infinite; vertical-align: middle; margin-right: 6px; }
     @keyframes sp { to { transform: rotate(360deg); } }
     .empty { color: var(--mut); text-align: center; margin-top: 60px; line-height: 1.8; font-size: .9rem; }
   </style>
@@ -115,16 +88,17 @@
   <div class="topbar">
     <div class="logo" id="logoBtn" style="cursor:pointer" title="Home">👻</div>
     <div class="brand" id="brandBtn" style="cursor:pointer" title="Home">Ghost Recorder</div>
-    <a href="#" id="homeBtn">🏠 Home</a>
-    <a href="#" id="listBtn" title="Hide/show the meeting list">◀ Hide list</a>
-    <div class="search"><input id="search" placeholder="Search meetings, notes, transcripts…"></div>
+    <a href="#" id="homeBtn" data-i18n="home">🏠 Home</a>
+    <a href="#" id="listBtn" title="Hide/show the meeting list" data-i18n="hide_list">◀ Hide list</a>
+    <div class="search"><input id="search" placeholder="Search meetings, notes, transcripts…" data-i18n="search_placeholder"></div>
     <div class="spacer"></div>
-    <a href="options.html" target="_blank">⚙ Settings</a>
+    <a href="options.html" target="_blank" data-i18n="settings">⚙ Settings</a>
   </div>
   <div class="layout">
     <div class="list" id="list"></div>
-    <div class="detail" id="detail"><div class="empty">Select a meeting on the left.</div></div>
+    <div class="detail" id="detail"><div class="empty" data-i18n="select_meeting_hint">Select a meeting on the left.</div></div>
   </div>
+  <script src="i18n.js"></script>
   <script src="templates.js"></script>
   <script src="ask.js"></script>
   <script src="dashboard.js"></script>

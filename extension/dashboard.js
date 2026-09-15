@@ -16,8 +16,12 @@ async function idbGet(id) { const db = await idb(); return new Promise((res) => 
 async function idbPut(v) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('pending', 'readwrite'); tx.objectStore('pending').put(v); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
 
 function load() {
-  chrome.storage.local.get('meetings', ({ meetings: m }) => {
+  chrome.storage.local.get(['meetings', 'settings'], ({ meetings: m, settings: s }) => {
     meetings = m || [];
+    if (self.GhostI18n) {
+      self.GhostI18n.setLanguage((s && s.language) || 'auto');
+      self.GhostI18n.translatePage();
+    }
     if (!selectedId && meetings.length) selectedId = meetings[0].id;
     render();
   });

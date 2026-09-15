@@ -59,204 +59,11 @@
       skeleton: `# {{"1:1" | "Standup"}} — {{names or team}}
 **Date:** {{date}}
 
-## Since Last Time
-- {{progress item}}
+## Progress / Accomplishments
+- {{done}}
 
-## Today / Focus
-- {{plan item}}
-
-## Blockers
-- {{blocker}} {{(needs: who/what)}}
-
-## Discussion / Feedback
-- {{topic}}
-
-## Action Items
-- [ ] {{owner}} — {{task}} {{(due: date)}}
-
-## Follow-ups for Next Time
-- {{item}}`,
-    },
-    customer_discovery: {
-      label: 'Customer discovery / user interview',
-      skeleton: `# Discovery Interview — {{person / company}}
-**Date:** {{date}}  ·  **Interviewee:** {{name, role}}  ·  **Interviewer:** {{name}}
-
-## Their World (context)
-{{2-3 sentences on who they are and their situation}}
-
-## Problems & Pain Points
-- {{pain}} — {{severity/frequency if stated}}
-
-## Current Solution / Workarounds
-- {{how they solve it today}}
-
-## Memorable Quotes
-> {{verbatim quote}}
-
-## Feature Requests / Reactions
-- {{request or reaction to what was shown}}
-
-## Willingness to Pay / Buying Signals
-- {{signal or "not discussed"}}
-
-## Action Items
-- [ ] {{owner}} — {{task}} {{(due: date)}}`,
-    },
-    job_interview: {
-      label: 'Job interview / screening',
-      skeleton: `# Interview — {{candidate}} for {{role}}
-**Date:** {{date}}  ·  **Interviewers:** {{names}}  ·  **Stage:** {{screen | technical | final | unknown}}
-
-## Candidate Snapshot
-{{2-3 sentences: background, current role, headline strengths}}
-
-## Experience & Skills Discussed
-- {{skill/experience}} — {{evidence given}}
-
-## Strengths Observed
-- {{strength}}
-
-## Concerns / Gaps
-- {{concern}}
-
-## Candidate's Questions & Motivations
-- {{what they asked / what they want}}
-
-## Logistics
-- **Notice period / availability:** {{stated or "not discussed"}}
-- **Compensation expectations:** {{stated or "not discussed"}}
-
-## Action Items
-- [ ] {{owner}} — {{task}} {{(due: date)}}`,
-    },
-    team_meeting: {
-      label: 'Team meeting / project sync',
-      skeleton: `# Team Sync — {{team / project}}
-**Date:** {{date}}  ·  **Attendees:** {{names}}
-
-## TL;DR
-{{2-3 sentences}}
-
-## Status by Topic / Workstream
-### {{topic}}
-- {{update}} — {{on track | at risk | blocked}}
-
-## Risks & Blockers
-- {{risk/blocker}} — {{owner / needs}}
-
-## Decisions
-- {{decision}}
-
-## Action Items
-- [ ] {{owner}} — {{task}} {{(due: date)}}`,
-    },
-    brainstorm: {
-      label: 'Brainstorm / workshop',
-      skeleton: `# Brainstorm — {{topic}}
-**Date:** {{date}}  ·  **Participants:** {{names}}
-
-## Goal / Prompt
-{{what the group was trying to solve}}
-
-## Ideas Raised
-- **{{idea}}** — {{one-line description; who proposed it if clear}}
-
-## Standout Ideas (most discussed / best received)
-- {{idea}} — {{why it stood out}}
-
-## Concerns / Constraints Raised
-- {{concern}}
-
-## Next Steps
-- [ ] {{owner}} — {{task}} {{(due: date)}}`,
-    },
-    lecture: {
-      label: 'Lecture / webinar / training',
-      skeleton: `# Notes — {{session title}}
-**Date:** {{date}}  ·  **Speaker:** {{name}}  ·  **Duration:** {{duration}}
-
-## One-Paragraph Summary
-{{what this session taught}}
-
-## Key Concepts
-### {{concept}}
-{{2-3 line explanation as taught}}
-
-## Examples / Case Studies Used
-- {{example}}
-
-## Practical Takeaways
-- {{something the listener can apply}}
-
-## Q&A Highlights
-- **Q:** {{question}} → **A:** {{answer}}
-
-## Resources Mentioned
-- {{book / link / tool}}`,
-    },
-    customer_success: {
-      label: 'Client check-in / customer success',
-      skeleton: `# Client Check-in — {{client}}
-**Date:** {{date}}  ·  **Attendees:** {{names + roles}}  ·  **Health:** {{green | yellow | red — judge from tone}}
-
-## Summary
-{{2-3 sentences}}
-
-## Wins Since Last Check-in
-- {{win}}
-
-## Issues / Complaints
-- {{issue}} — {{impact; how upset are they}}
-
-## Requests
-- {{feature/support request}}
-
-## Renewal / Expansion Signals
-- {{signal: growth, churn risk, upsell opening — or "none"}}
-
-## Commitments Made to the Client
-- [ ] {{owner}} — {{commitment}} {{(due: date)}}
-
-## Internal Follow-ups
-- [ ] {{owner}} — {{task}}`,
-    },
-    leadership: {
-      label: 'Leadership / board review',
-      skeleton: `# Leadership Review — {{meeting name}}
-**Date:** {{date}}  ·  **Attendees:** {{names + roles}}
-
-## Executive Summary
-{{3-4 sentences: state of the business/project as presented}}
-
-## Metrics & Results Reported
-- {{metric}}: {{value / trend}}
-
-## Strategic Discussion
-- {{topic}} — {{positions taken, by whom}}
-
-## Decisions
-- {{decision}} — {{decided by}}
-
-## Asks & Approvals
-- {{who asked for what}} → {{approved | denied | deferred}}
-
-## Action Items
-- [ ] {{owner}} — {{task}} {{(due: date)}}`,
-    },
-    retro: {
-      label: 'Sprint retrospective',
-      skeleton: `# Retro — {{team / sprint}}
-**Date:** {{date}}  ·  **Participants:** {{names}}
-
-## What Went Well
-- {{item}}
-
-## What Didn't Go Well
-- {{item}}
-
-## Root Causes Discussed
-- {{cause behind the biggest pain}}
+## Blockers / Impediments
+- {{blocker}}
 
 ## Ideas / Experiments to Try
 - {{improvement}}
@@ -273,22 +80,28 @@
     const t = TEMPLATES[id] || TEMPLATES.general;
     const m = meta || {};
     const includeTranscript = !opts || opts.includeTranscript !== false;
+    const lang = (opts && opts.language) || (m && m.language) || 'auto';
+    const langDirective = self.GhostI18n ? self.GhostI18n.getLanguagePromptDirective(lang) : '';
+
     return `You are an elite meeting-notes writer — the quality bar is Fathom/Notion AI. A busy executive should get everything they need from your notes WITHOUT watching the meeting. Produce GitHub-flavored Markdown that fills the EXACT skeleton below.
+
+${langDirective}
 
 QUALITY RULES (these are what separate great notes from useless ones):
 - Preserve every heading verbatim. Omit a section only if there is genuinely NO content for it; never invent facts.
-- SPECIFICITY OVER SUMMARY: keep real numbers, names, dates, amounts, and product terms exactly as spoken ("100 vacancies: 50 freshers at 4.5 LPA, 50 experienced", not "hiring plans were discussed"). A note that could have been written without attending the meeting is a FAILED note.
-- ACTION ITEMS — the most important section. Extract EVERY commitment, including ones made in passing ("I'll send that deck", "let me check with legal"). Each item: verb-first, concrete, with owner and stated deadline: "- [ ] Owner — send pricing deck to Acme (due: Friday)". Use a real name when known, else "Unassigned". FORBIDDEN: vague items ("follow up", "sync later", "discuss further") without the specific object, and inventing tasks nobody committed to. If the meeting truly produced no action items, write "- None captured".
-- DECISIONS vs actions: a decision is something now settled ("we go with plan B"); record who made it. Don't duplicate decisions as action items.
-- TL;DR/Summary: 2-4 sentences a CEO would actually read — what was the point, what changed, what happens next. No filler like "the participants discussed various topics".
-- Capture disagreements, risks, and open questions honestly — notes that only record harmony are not trusted.
-- Quote verbatim (with quotation marks) when someone's exact words matter: commitments, pricing, strong opinions.
+- SPECIFICITY OVER SUMMARY: keep real numbers, names, dates, amounts, and product terms exactly as spoken. A note that could have been written without attending the meeting is a FAILED note.
+- ACTION ITEMS — extract EVERY commitment, including ones made in passing ("I'll send that deck"). Each item: verb-first, concrete, with owner and stated deadline: "- [ ] Owner — task (due: date)". Use a real name when known, else "Unassigned".
+- DECISIONS vs actions: a decision is something now settled; record who made it. Don't duplicate decisions as action items.
+- TL;DR/Summary: 2-4 sentences a CEO would actually read — what was the point, what changed, what happens next.
+- Capture disagreements, risks, and open questions honestly.
+- Quote verbatim (with quotation marks) when someone's exact words matter.
 - Skip pleasantries, small talk, and connection issues entirely.
 - Known context — Date: ${m.date || 'Unknown'} · Platform: ${m.platform || 'Unknown'} · Duration: ${m.duration || 'Unknown'}.
-- Use REAL speaker names from the provided captions/speaker hints wherever possible.${includeTranscript ? `
+- Use REAL speaker names from the provided captions/speaker hints wherever possible.
+- SPEAKER DIARIZATION: The audio stream is captured in multi-channel format (Right channel = local participant "You", Left channel = remote call participants). Identify local participant statements as "You" and remote participants using their real names or consistent "Speaker 1", "Speaker 2" labels.${includeTranscript ? `
 - After the skeleton, add a "## Full Transcript" section. STRICT FORMAT — every line MUST be exactly: "[mm:ss] Speaker: text" (use [h:mm:ss] past one hour). No bold, no bullets, no extra prose.
-- TIMESTAMP ACCURACY IS CRITICAL: [mm:ss] must be the actual position in the audio where that sentence STARTS (listeners click a line to jump the recording there). Never bunch timestamps or reset them; they must increase monotonically through the whole audio, ending near the meeting duration given above.
-- SPEAKER ACCURACY: distinguish speakers by voice. Use real names from the captions/hints; when a voice has no name, label it consistently "Speaker 1", "Speaker 2", … for the entire transcript (never merge different voices into one label).
+- TIMESTAMP ACCURACY IS CRITICAL: [mm:ss] must be the actual position in the audio where that sentence STARTS. Never bunch timestamps or reset them; they must increase monotonically through the whole audio, ending near the meeting duration given above.
+- SPEAKER ACCURACY: distinguish speakers by voice and channel. Detect speaker changeovers at every turn. Label speakers consistently.
 - Transcribe the ENTIRE audio start to finish — do not summarize, skip, or stop early.` : ''}
 - If the audio/transcript is empty or silent, output only "# Meeting Notes — ${m.date || ''}" then "No spoken audio detected."
 

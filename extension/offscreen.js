@@ -1,23 +1,23 @@
 // Ghost Recorder — Offscreen Recorder (serverless, multi-provider)
 //
-// Captures BOTH sides of the call and survives backgrounding/minimizing:
-//   tab audio ─┬─► recGain ─► recDest ─► MediaRecorder(s)   (RECORDING: remote + you)
-//              └─► monitorGain ─► ctx.destination           (you keep HEARING the call, once)
-//   mic audio ───► micGain ─► recDest                       (recorded, NOT monitored = no feedback)
-//
-// Hardening: AudioContext auto-resume if the OS suspends it when minimized;
-// auto-stop if the captured tab is closed/navigated; silent-track detection;
-// chunks buffered + audio kept in IndexedDB so a failed AI call can be retried.
+// Multi-Track Audio & High-Res Video Graph:
+// Call Mode:
+//   tab audio ─┬─► tabGain ─► merger(Channel 0: Remote) ─► recDest ─► MediaRecorder(s)
+//              └─► monitorEl ─► Playout (you keep HEARING the call, once)
+//   mic audio ───► micGain ─► merger(Channel 1: You)   ─► recDest
+// System Only Mode:
+//   tab audio ───► tabGain ─► recDest ─► MediaRecorder(s)
 
-let ctx = null, tabStream = null, micStream = null, recDest = null, micConnected = false, monitorEl = null;
+let ctx = null, tabStream = null, micStream = null, recDest = null, mergerNode = null, micConnected = false, monitorEl = null;
 let audioRecorder = null, videoRecorder = null, audioChunks = [], videoChunks = [];
 let meetingId = null, stopping = false, recStartMs = 0;
 let levelTimer = null, tabLevel = null, micLevel = null, tabHadAudio = false, micHadAudio = false, tabHadAudioTrack = false;
 let silenceWarned = false, levelTicks = 0, persistTimer = null, samplerTimer = null;
 let tabPeak = 0, micPeak = 0, tabPeakAll = 0, micPeakAll = 0;
 let pausedAt = 0, totalPausedMs = 0;
-let monitorFailures = 0, monitorViaCtx = false;   // monitor resilience (issue: "other side went silent")
-let micGainNode = null, micMutedByUser = false;   // mic follows the meeting's mute state
+let monitorFailures = 0, monitorViaCtx = false;
+let micGainNode = null, micMutedByUser = false;
+let currentRecordMode = 'call';
 
 function log(msg) { console.log('[offscreen]', msg); chrome.runtime.sendMessage({ action: 'LOG', message: msg }).catch(() => {}); }
 
@@ -27,7 +27,6 @@ async function idbPut(v) { const db = await idb(); return new Promise((res, rej)
 async function idbGet(id) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction(IDB_STORE, 'readonly'); const rq = tx.objectStore(IDB_STORE).get(id); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); }); }
 async function idbDel(id) { const db = await idb(); return new Promise((res) => { const tx = db.transaction(IDB_STORE, 'readwrite'); tx.objectStore(IDB_STORE).delete(id); tx.oncomplete = res; tx.onerror = res; }); }
 async function idbAll() { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction(IDB_STORE, 'readonly'); const rq = tx.objectStore(IDB_STORE).getAll(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error); }); }
-// Keep the library bounded: newest 12 full recordings stay playable; older ones drop.
 async function pruneLibrary() {
   try {
     const ids = (await idbAll()).map((r) => r.id).filter((i) => !String(i).startsWith('live-')).sort().reverse();
@@ -37,8 +36,10 @@ async function pruneLibrary() {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.target !== 'offscreen') return;
-  if (message.action === 'PING') { sendResponse({ ready: true }); return; } // readiness handshake
-  if (message.action === 'START_RECORDING') startRecording(message.data.streamId, message.data.videoEnabled, message.data.meetingId);
+  if (message.action === 'PING') { sendResponse({ ready: true }); return; }
+  if (message.action === 'START_RECORDING') {
+    startRecording(message.data.streamId, message.data.videoEnabled, message.data.meetingId, message.data.recordMode, message.data.videoOptions, message.data.audioOptions);
+  }
   else if (message.action === 'STOP_RECORDING') stopRecording(message.data || {});
   else if (message.action === 'PAUSE_RECORDING') pauseRecording(true);
   else if (message.action === 'RESUME_RECORDING') pauseRecording(false);
@@ -48,9 +49,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   else if (message.action === 'RECOVER') recoverInterrupted();
 });
 
-// Mute/unmute the mic INSIDE the recording (gain to 0) — driven by the meeting
-// platform's own mute button (content script watches it) or a manual toggle.
-// If you're muted in the call, people can't hear you — the recording shouldn't either.
 function setMicMuted(muted, source) {
   micMutedByUser = muted;
   if (micGainNode) {
@@ -59,8 +57,6 @@ function setMicMuted(muted, source) {
   log('mic ' + (muted ? 'MUTED' : 'unmuted') + ' in recording (' + source + ')');
 }
 
-// FAILSAFE: if Chrome/the extension died mid-recording, a 'live-<id>' snapshot is
-// still in IndexedDB. Turn it into a normal (recovered) meeting with saved files.
 async function recoverInterrupted() {
   try {
     const all = await idbAll();
@@ -68,12 +64,9 @@ async function recoverInterrupted() {
       const rid = String(rec.id);
       if (!rid.startsWith('live-')) continue;
       const mid = rid.slice(5);
-      if (mid === meetingId) continue; // that one is still actively recording
+      if (mid === meetingId) continue;
       log('recovering interrupted recording ' + mid);
-      // Register the meeting first (so the save lands in its folder), then save files.
       await new Promise((res) => chrome.runtime.sendMessage({ action: 'RECOVERED', meetingId: mid, hasVideo: !!rec.video }, () => res()));
-      // Snapshots were cut mid-flight and carry no Duration header — measure and
-      // stamp so recovered files are seekable and end where the media ends.
       if (rec.audio) { const d = await measureDurationMs(rec.audio, 0); if (d > 0) rec.audio = await fixWebmDuration(rec.audio, d); }
       if (rec.video) { const d = await measureDurationMs(rec.video, 0); if (d > 0) rec.video = await fixWebmDuration(rec.video, d); }
       if (rec.audio) saveBlob(mid, 'audio', rec.audio);
@@ -91,18 +84,26 @@ function levelChecker(node) {
 }
 
 async function connectMic(why) {
-  if (micConnected || !ctx || !recDest) return;
+  if (micConnected || !ctx || !recDest || currentRecordMode === 'system_only') return;
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+    });
     if (ctx.state === 'suspended') await ctx.resume();
     const micNode = ctx.createMediaStreamSource(micStream);
-    const micGain = ctx.createGain(); micGain.gain.value = micMutedByUser ? 0 : 1; // honor mute state present before mic connected
+    const micGain = ctx.createGain(); micGain.gain.value = micMutedByUser ? 0 : 1;
     micGainNode = micGain;
-    micNode.connect(micGain).connect(recDest); // recorded only — never monitored (no feedback)
+
+    if (mergerNode) {
+      micNode.connect(micGain).connect(mergerNode, 0, 1);
+    } else {
+      micNode.connect(micGain).connect(recDest);
+    }
+
     micLevel = levelChecker(micNode);
     micConnected = true;
     chrome.runtime.sendMessage({ action: 'MIC_STATUS', connected: true }).catch(() => {});
-    log(`microphone mixed in (${why})`);
+    log(`microphone mixed into Channel 1 (${why})`);
   } catch (err) { log(`microphone not available (${why}): ${err.message}`); }
 }
 
@@ -123,15 +124,6 @@ function sendAudioStatus(ok, text) {
   chrome.runtime.sendMessage({ action: 'AUDIO_STATUS', ok, text }).catch(() => {});
 }
 
-// ---- Seekable WebM ----------------------------------------------------------
-// MediaRecorder writes no Duration into the Segment Info, so players can't show
-// a timeline or seek — playback always restarts from 0. Patch the real duration
-// into the EBML header before saving. Best-effort: any parse failure returns the
-// original blob untouched.
-// Ask the browser for the media's REAL length: fresh MediaRecorder webm has no
-// Duration header, so metadata reports Infinity — seeking far past the end
-// forces Chrome to scan the clusters and report the true duration. Falls back
-// to the wall-clock estimate on any failure (never blocks saving).
 function measureDurationMs(blob, fallbackMs) {
   return new Promise((resolve) => {
     let el, url, timer;
@@ -150,7 +142,7 @@ function measureDurationMs(blob, fallbackMs) {
       el.onloadedmetadata = () => {
         if (isFinite(el.duration) && el.duration > 0) { done(el.duration * 1000); return; }
         el.ondurationchange = () => { if (isFinite(el.duration) && el.duration > 0) done(el.duration * 1000); };
-        el.currentTime = 1e8; // force the cluster scan
+        el.currentTime = 1e8;
       };
       el.src = url;
     } catch (e) { done(fallbackMs); }
@@ -171,20 +163,17 @@ async function fixWebmDuration(blob, durationMs) {
       for (let i = 1; i < sizeLen; i++) { size = size * 256 + buf[sp + i]; if (buf[sp + i] !== 0xff) unknown = false; }
       return { id, size, sizeLen, hdrLen: idLen + sizeLen, dataPos: sp + sizeLen, pos, unknown };
     }
-    // top level: skip EBML header, find Segment
     let pos = 0, seg = null;
     while (pos < buf.length) { const e = readElem(pos); if (!e) return blob; if (e.id === 0x18538067) { seg = e; break; } pos = e.dataPos + e.size; }
     if (!seg) return blob;
-    // inside Segment: find Info before the first media Cluster
     pos = seg.dataPos; let info = null;
     while (pos < buf.length) {
       const e = readElem(pos); if (!e) return blob;
       if (e.id === 0x1549A966) { info = e; break; }
-      if (e.id === 0x1F43B675 || e.unknown) return blob; // hit media / can't walk further
+      if (e.id === 0x1F43B675 || e.unknown) return blob;
       pos = e.dataPos + e.size;
     }
     if (!info || info.unknown) return blob;
-    // inside Info: read TimecodeScale, find existing Duration
     let scale = 1000000, dur = null; pos = info.dataPos;
     while (pos < info.dataPos + info.size) {
       const e = readElem(pos); if (!e) break;
@@ -192,24 +181,23 @@ async function fixWebmDuration(blob, durationMs) {
       if (e.id === 0x4489) dur = e;
       pos = e.dataPos + e.size;
     }
-    const durVal = durationMs * 1e6 / scale; // Duration is in TimecodeScale units
-    if (dur && (dur.size === 8 || dur.size === 4)) { // overwrite in place
+    const durVal = durationMs * 1e6 / scale;
+    if (dur && (dur.size === 8 || dur.size === 4)) {
       const dv = new DataView(buf.buffer, dur.dataPos, dur.size);
       if (dur.size === 8) dv.setFloat64(0, durVal); else dv.setFloat32(0, durVal);
       return new Blob([buf], { type: blob.type });
     }
     if (dur) return blob;
-    // No Duration element: splice one in at the start of Info's body.
-    const durBytes = new Uint8Array(11); // 0x4489, size 0x88, float64
+    const durBytes = new Uint8Array(11);
     durBytes[0] = 0x44; durBytes[1] = 0x89; durBytes[2] = 0x88;
     new DataView(durBytes.buffer).setFloat64(3, durVal);
     const newInfoSize = info.size + durBytes.length;
-    const infoHdr = new Uint8Array(4 + 8); // Info id (4B) + 8-byte vint size
+    const infoHdr = new Uint8Array(4 + 8);
     infoHdr.set([0x15, 0x49, 0xA9, 0x66, 0x01]);
     for (let i = 0; i < 7; i++) infoHdr[5 + i] = (newInfoSize / Math.pow(256, 6 - i)) & 0xff;
     const prefix = buf.slice(0, info.pos);
     const delta = (infoHdr.length + durBytes.length + info.size) - (info.hdrLen + info.size);
-    if (!seg.unknown) { // Segment has a known size: only safe if we can rewrite it in the same width
+    if (!seg.unknown) {
       let s = seg.size + delta;
       const segSizePos = seg.pos + (seg.hdrLen - seg.sizeLen);
       if (seg.sizeLen !== 8) return blob;
@@ -226,20 +214,44 @@ function onTabEnded() {
   chrome.runtime.sendMessage({ action: 'TAB_ENDED', meetingId }).catch(() => {});
 }
 
-async function startRecording(streamId, videoEnabled, id) {
+function teardownGraph() {
+  try { if (samplerTimer) clearInterval(samplerTimer); } catch (e) {}
+  try { if (levelTimer) clearInterval(levelTimer); } catch (e) {}
+  try { if (persistTimer) clearInterval(persistTimer); } catch (e) {}
+  try { if (monitorEl) { monitorEl.pause(); monitorEl.srcObject = null; monitorEl.remove(); monitorEl = null; } } catch (e) {}
+  try { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } } catch (e) {}
+  try { if (tabStream) { tabStream.getTracks().forEach((t) => t.stop()); tabStream = null; } } catch (e) {}
+  try { if (ctx && ctx.state !== 'closed') ctx.close(); } catch (e) {}
+  ctx = recDest = mergerNode = micGainNode = null;
+  micConnected = false;
+}
+
+async function startRecording(streamId, videoEnabled, id, recordMode, videoOptions, audioOptions) {
   meetingId = id; stopping = false; audioChunks = []; videoChunks = [];
+  currentRecordMode = recordMode || 'call';
   tabHadAudio = micHadAudio = tabHadAudioTrack = false; silenceWarned = false; levelTicks = 0;
   tabPeak = 0; micPeak = 0; tabPeakAll = 0; micPeakAll = 0;
   recStartMs = Date.now(); pausedAt = 0; totalPausedMs = 0;
-  log(`starting recording (video=${videoEnabled}, id=${id})`);
+
+  vOpts = Object.assign({ resolution: '1080p', fps: 30, codec: 'vp9', bitrate: 'auto' }, videoOptions || {});
+  const resMap = {
+    '4k': { w: 3840, h: 2160, b: 14000000, fps: 30 },
+    '1440p': { w: 2560, h: 1440, b: 8000000, fps: 30 },
+    '1080p': { w: 1920, h: 1080, b: 4500000, fps: 30 },
+    '720p': { w: 1280, h: 720, b: 2500000, fps: 30 },
+    '720p_low': { w: 1280, h: 720, b: 1200000, fps: 10 }
+  };
+  const targetSpec = resMap[vOpts.resolution] || resMap['1080p'];
+  const targetFps = parseInt(vOpts.fps, 10) || targetSpec.fps;
+  const targetBitrate = targetSpec.b;
+
+  log(`starting recording (mode=${currentRecordMode}, video=${videoEnabled}, spec=${targetSpec.w}x${targetSpec.h}@${targetFps}, id=${id})`);
+
   try {
-    // googDisableLocalEcho:true = deterministic audio path. With :false Chrome
-    // MAY keep the tab playing AND we play our monitor copy ~100ms later — two
-    // overlapping playouts sound garbled ("disturbed") to the user. One path only.
     const constraints = { audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId, googDisableLocalEcho: true } } };
-    // 10fps / 1Mbps: meeting video is mostly-static slides+faces; lower encode
-    // load = no page lag while recording (VP8 encoding is the CPU hog here).
-    if (videoEnabled) constraints.video = { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId, maxWidth: 1280, maxHeight: 720, maxFrameRate: 10 } };
+    if (videoEnabled) {
+      constraints.video = { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId, maxWidth: targetSpec.w, maxHeight: targetSpec.h, maxFrameRate: targetFps } };
+    }
     tabStream = await navigator.mediaDevices.getUserMedia(constraints);
 
     const tabAudio = tabStream.getAudioTracks();
@@ -247,30 +259,33 @@ async function startRecording(streamId, videoEnabled, id) {
     log(`captured tracks — video:${tabStream.getVideoTracks().length} audio:${tabAudio.length}`);
     tabStream.getTracks().forEach((t) => { t.onended = onTabEnded; });
 
-    // 'playback' latency = larger render buffers (hidden page is CPU-throttled; the
-    // default 'interactive' buffers underran -> crackle). No forced sampleRate: on
-    // 44.1kHz output devices a forced 48k context resamples on the fly = more glitches.
     ctx = new AudioContext({ latencyHint: 'playback' });
     if (ctx.state === 'suspended') await ctx.resume();
-    // If the OS suspends the AudioContext when the window is minimized, resume it so recording doesn't drop out.
     ctx.onstatechange = () => { if (ctx && ctx.state === 'suspended' && !stopping) ctx.resume().catch(() => {}); };
-    recDest = ctx.createMediaStreamDestination();
 
-    let startMonitor = () => {};  // hoisted so the levelTimer watchdog can call it
+    if (currentRecordMode === 'call') {
+      recDest = ctx.createMediaStreamDestination();
+      recDest.channelCount = 2;
+      mergerNode = ctx.createChannelMerger(2);
+      mergerNode.connect(recDest);
+    } else {
+      recDest = ctx.createMediaStreamDestination();
+      mergerNode = null;
+    }
+
+    let startMonitor = () => {};
     if (tabAudio.length) {
       const tabNode = ctx.createMediaStreamSource(new MediaStream([tabAudio[0]]));
       const recGain = ctx.createGain(); recGain.gain.value = 1.0;
-      tabNode.connect(recGain).connect(recDest);                 // BRANCH A — record (WebAudio mix)
-      // BRANCH B — MONITOR through an <audio> element instead of ctx.destination:
-      // the element has its own deeply-buffered playout path, so device-output
-      // underruns on this throttled hidden page no longer crackle what the user
-      // hears, and the recording graph no longer contends with device output.
+
+      if (mergerNode) {
+        tabNode.connect(recGain).connect(mergerNode, 0, 0); // Channel 0 (Left) = System/Call Audio
+      } else {
+        tabNode.connect(recGain).connect(recDest);
+      }
+
       monitorEl = new Audio();
       monitorEl.srcObject = new MediaStream([tabAudio[0]]);
-      // The tab itself is muted by capture, so THIS element is the user's only
-      // way to hear the meeting. It must never silently fail: retry play() (the
-      // hidden page can hit autoplay rejection), and if it won't start within
-      // ~6s, fall back to WebAudio playout (ctx.destination) — audible always.
       monitorFailures = 0; monitorViaCtx = false;
       startMonitor = () => {
         if (!monitorEl || stopping || monitorViaCtx) return;
@@ -286,51 +301,43 @@ async function startRecording(streamId, videoEnabled, id) {
       };
       startMonitor();
       tabLevel = levelChecker(tabNode);
-      // NOTE: captured tab tracks fire mute/unmute on every natural pause in speech —
-      // that is NOT an error (v5.8.3 fix: these used to raise false "no audio" warnings).
-      tabAudio[0].onmute = () => log('tab audio track muted (natural silence — normal)');
+      tabAudio[0].onmute = () => log('tab audio track muted (natural silence)');
       tabAudio[0].onunmute = () => log('tab audio track unmuted');
     } else { log('WARNING: no tab audio track'); }
 
-    // Level sampling every 300ms (a single 2s snapshot missed speech between checks
-    // and caused false "silent" verdicts); peaks are evaluated by the 2s watchdog.
     samplerTimer = setInterval(() => {
       if (tabLevel) { const v = tabLevel(); tabPeak = Math.max(tabPeak, v); tabPeakAll = Math.max(tabPeakAll, v); }
       if (micLevel) { const v = micLevel(); micPeak = Math.max(micPeak, v); micPeakAll = Math.max(micPeakAll, v); }
     }, 300);
 
-    // Watchdog every 2s: keep the AudioContext alive; warn LIVE only if the meeting
-    // side has produced NO audio at all for ~14s, and clear the moment audio appears.
     levelTimer = setInterval(() => {
       if (ctx && ctx.state !== 'running' && !stopping) ctx.resume().catch(() => {});
-      // Monitor watchdog: the user must ALWAYS hear the call. If the element
-      // playout stalled (autoplay veto, device change) kick it; fallback engages
-      // via startMonitor's failure counter.
       if (monitorEl && !monitorViaCtx && monitorEl.paused && !stopping) startMonitor();
       levelTicks++;
       if (tabPeak > 0.008) { if (!tabHadAudio || silenceWarned) { silenceWarned = false; sendAudioStatus(true, ''); } tabHadAudio = true; }
       if (micPeak > 0.008) micHadAudio = true;
-      if (levelTicks % 10 === 0) log(`audio levels — tabPeak=${tabPeak.toFixed(4)} micPeak=${micPeak.toFixed(4)} (threshold 0.008)`);
+      if (levelTicks % 10 === 0) log(`audio levels — tabPeak=${tabPeak.toFixed(4)} micPeak=${micPeak.toFixed(4)}`);
       tabPeak = 0; micPeak = 0;
-      if (!tabHadAudio && levelTicks === 7 && !silenceWarned) { silenceWarned = true; sendAudioStatus(false, 'No meeting audio detected yet — unmute the tab / check the call has sound.'); }
+      if (!tabHadAudio && levelTicks === 7 && !silenceWarned) { silenceWarned = true; sendAudioStatus(false, 'No meeting audio detected yet — unmute the tab / check call sound.'); }
     }, 2000);
 
     const amime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-    audioRecorder = new MediaRecorder(recDest.stream, { mimeType: amime, audioBitsPerSecond: 64000 });
+    audioRecorder = new MediaRecorder(recDest.stream, { mimeType: amime, audioBitsPerSecond: 128000 });
     audioRecorder.ondataavailable = (e) => { if (e.data && e.data.size) audioChunks.push(e.data); };
     audioRecorder.start(5000);
 
     if (videoEnabled && tabStream.getVideoTracks().length) {
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
+      let vmime = 'video/webm';
+      if (vOpts.codec === 'vp9' && MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) vmime = 'video/webm;codecs=vp9,opus';
+      else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) vmime = 'video/webm;codecs=vp8,opus';
+
       const recordStream = new MediaStream([tabStream.getVideoTracks()[0], ...recDest.stream.getAudioTracks()]);
-      videoRecorder = new MediaRecorder(recordStream, { mimeType: mime, videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 });
+      videoRecorder = new MediaRecorder(recordStream, { mimeType: vmime, videoBitsPerSecond: targetBitrate, audioBitsPerSecond: 128000 });
       videoRecorder.ondataavailable = (e) => { if (e.data && e.data.size) videoChunks.push(e.data); };
       videoRecorder.start(5000);
     }
-    log('recording started');
+    log('recording started successfully');
 
-    // FAILSAFE: snapshot the chunks so far into IndexedDB every 20s — if the
-    // browser/extension dies mid-meeting, the recording is recoverable.
     persistTimer = setInterval(() => {
       if (stopping || !meetingId) return;
       const snap = { id: 'live-' + meetingId, updated: Date.now(), meta: { date: new Date(recStartMs).toISOString() } };
@@ -339,47 +346,32 @@ async function startRecording(streamId, videoEnabled, id) {
       if (snap.audio) idbPut(snap).catch((e) => log('live snapshot failed: ' + e.message));
     }, 20000);
 
-    // Mic AFTER the recorders are live: a slow/hung permission check must never
-    // delay or kill the meeting recording. It mixes into recDest mid-stream fine.
-    connectMic('eager').then(() => {
-      if (!micConnected) chrome.runtime.sendMessage({ action: 'MIC_STATUS', connected: false }).catch(() => {});
-    });
+    if (currentRecordMode === 'call') {
+      connectMic('eager').then(() => {
+        if (!micConnected) chrome.runtime.sendMessage({ action: 'MIC_STATUS', connected: false }).catch(() => {});
+      });
+    }
   } catch (err) {
     log(`recording failed to start: ${err.message}`);
-    try { teardownGraph(); } catch (e) { /* */ }   // don't leak a live capture / AudioContext
+    try { teardownGraph(); } catch (e) {}
     chrome.runtime.sendMessage({ action: 'NOTES_ERROR', meetingId: id, error: 'Recording failed to start: ' + err.message }).catch(() => {});
   }
 }
 
 function saveBlob(id, kind, blob) {
-  const url = URL.createObjectURL(blob);
-  chrome.runtime.sendMessage({ action: 'SAVE_FILE', meetingId: id, kind, url, bytes: blob.size }).catch(() => {});
-  setTimeout(() => URL.revokeObjectURL(url), 180000);
+  chrome.runtime.sendMessage({ action: 'SAVE_FILE', meetingId: id, kind, blob }).catch(() => {});
 }
 
-function teardownGraph() {
-  if (levelTimer) { clearInterval(levelTimer); levelTimer = null; }
-  if (samplerTimer) { clearInterval(samplerTimer); samplerTimer = null; }
-  if (persistTimer) { clearInterval(persistTimer); persistTimer = null; }
-  if (monitorEl) { try { monitorEl.pause(); monitorEl.srcObject = null; } catch (e) { /* */ } monitorEl = null; }
-  if (tabStream) tabStream.getTracks().forEach((t) => { t.onended = null; t.stop(); });
-  if (micStream) micStream.getTracks().forEach((t) => t.stop());
-  if (ctx) { try { ctx.onstatechange = null; ctx.close(); } catch (e) { /* ignore */ } }
-  ctx = null; tabStream = null; micStream = null; recDest = null; tabLevel = null; micLevel = null;
-  audioRecorder = null; videoRecorder = null;
-  micConnected = false; // CRITICAL: without this, every recording after the first skips the mic (silent second run)
-  micGainNode = null; micMutedByUser = false; monitorViaCtx = false; monitorFailures = 0;
-}
-
+function db(v) { return v ? (20 * Math.log10(v)).toFixed(1) + ' dBFS' : '-inf dBFS'; }
 function audioWarnings() {
   const w = [];
-  const db = (v) => (v > 0 ? Math.round(20 * Math.log10(v)) + ' dB' : 'silence');
-  if (!tabHadAudioTrack) w.push('No meeting-audio track was captured — the remote side may be missing.');
-  else if (!tabHadAudio) w.push('The meeting (remote) audio was silent the whole recording. (Normal if you were ALONE in the call — your own voice comes from the mic, not the meeting.)');
-  if (!micConnected) w.push('Your microphone was NOT captured — open Settings → "Enable mic", then record again.');
-  else if (micMutedByUser) w.push('Your mic was muted (following the meeting mute) for at least part of this recording.');
-  else if (!micHadAudio) w.push('Your microphone was connected but stayed silent — check Windows is using the right input device.');
-  w.push(`Audio diagnostics — meeting side peak: ${db(tabPeakAll)} · your mic peak: ${db(micPeakAll)} (speech is roughly -30 to -6 dB).`);
+  if (!tabHadAudioTrack) w.push('No audio track was captured from the meeting tab.');
+  else if (!tabHadAudio) w.push('The meeting tab produced no audio — was the call silent / was your computer output muted?');
+  if (currentRecordMode === 'call') {
+    if (!micConnected) w.push('Microphone was NOT connected — your voice was not recorded. Enable mic in Settings for 2-sided calls.');
+    else if (micMutedByUser) w.push('Your mic was muted for part of this recording.');
+    else if (!micHadAudio) w.push('Your microphone stayed silent — check input device settings.');
+  }
   return w;
 }
 
@@ -388,7 +380,7 @@ async function transcribeAndReport(id, audioBlob, captions, ctxData, extraWarnin
   try {
     const res = await self.GhostProviders.run(audioBlob, captions || '', ctxData.settings, ctxData.meta || {});
     chrome.runtime.sendMessage({ action: 'NOTES_READY', meetingId: id, notes: res.notes, model: res.model, provider: res.provider, warnings: (extraWarnings || []).concat(res.warnings || []) }).catch(() => {});
-    log('notes ready'); // recording stays in IndexedDB for playback/re-generation (pruned to newest 12)
+    log('notes ready');
   } catch (err) {
     chrome.runtime.sendMessage({ action: 'NOTES_ERROR', meetingId: id, error: err.message, warnings: extraWarnings || [] }).catch(() => {});
     log('notes failed: ' + err.message);
@@ -405,17 +397,13 @@ async function stopRecording(opts) {
   }
   await Promise.all(waits);
 
-  if (pausedAt) { totalPausedMs += Date.now() - pausedAt; pausedAt = 0; } // stopped while paused
+  if (pausedAt) { totalPausedMs += Date.now() - pausedAt; pausedAt = 0; }
   const durationMs = Math.max(0, Date.now() - recStartMs - totalPausedMs);
   let audioBlob = audioChunks.length ? new Blob(audioChunks, { type: 'audio/webm' }) : null;
   let videoBlob = videoChunks.length ? new Blob(videoChunks, { type: 'video/webm' }) : null;
   audioChunks = []; videoChunks = [];
   const warnings = audioWarnings();
 
-  // Stamp each file with its OWN measured duration (decoded from the media
-  // timeline), not the wall clock — if the stamp is shorter than the real
-  // media, players stop early and pretend the recording ended. Wall clock is
-  // only the fallback when measuring fails.
   if (audioBlob) audioBlob = await fixWebmDuration(audioBlob, await measureDurationMs(audioBlob, durationMs));
   if (videoBlob) videoBlob = await fixWebmDuration(videoBlob, await measureDurationMs(videoBlob, durationMs));
   if (videoBlob) saveBlob(id, 'video', videoBlob);
@@ -429,8 +417,6 @@ async function stopRecording(opts) {
     return;
   }
   const ctxData = { settings: opts.settings, meta: opts.meta || {} };
-  // Keep the full recording in IndexedDB: powers in-dashboard playback, note
-  // re-generation with other templates, and retry after AI failures.
   try { await idbPut({ id, audio: audioBlob, video: videoBlob || null, captions: opts.captions || '', settings: opts.settings, meta: opts.meta || {} }); } catch (e) { log('idb put failed: ' + e.message); }
   await idbDel('live-' + id);
   pruneLibrary();
@@ -442,7 +428,6 @@ async function retry(opts) {
   try {
     const rec = await idbGet(id);
     if (!rec || !rec.audio) { chrome.runtime.sendMessage({ action: 'NOTES_ERROR', meetingId: id, error: 'Audio no longer available to retry — please re-record.' }).catch(() => {}); return; }
-    // Allow settings (provider/template) to be overridden on retry.
     const settings = opts.settings || rec.settings;
     await transcribeAndReport(id, rec.audio, rec.captions || '', { settings, meta: opts.meta || rec.meta || {} }, []);
   } catch (err) { chrome.runtime.sendMessage({ action: 'NOTES_ERROR', meetingId: id, error: err.message }).catch(() => {}); }
