@@ -2,7 +2,7 @@
 const DEFAULTS = {
   provider: 'gemini',
   keys: { gemini: '', groq: '', openrouter: '', custom: '', local: '' },
-  models: { gemini: 'gemini-3.1-flash-lite', groq: 'llama-3.3-70b-versatile', openrouter: 'google/gemini-2.5-flash', custom: '', local: 'Meta-Llama-3.1-8B-Instruct', chrome_ai: 'gemini-nano' },
+  models: { gemini: 'gemini-2.5-flash', groq: 'llama-3.3-70b-versatile', openrouter: 'google/gemini-2.5-flash', custom: '', local: 'Meta-Llama-3.1-8B-Instruct', chrome_ai: 'gemini-nano' },
   modelHistory: { gemini: [], groq: [], openrouter: [], custom: [], local: [] },
   groqWhisper: 'whisper-large-v3-turbo',
   customBaseUrl: '',

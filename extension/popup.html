@@ -27,6 +27,10 @@
       background: #ffffff;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
+    }
+
+    /* Main Container Views */
+    .view-panel {
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -249,79 +253,237 @@
       70% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
       100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
     }
+
+    /* Settings Panel Layout (Matches Mockup Image) */
+    .settings-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .settings-title {
+      font-weight: 700;
+      font-size: 1.12rem;
+      color: var(--text);
+      letter-spacing: -.2px;
+    }
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line);
+      gap: 10px;
+    }
+    .settings-row:last-child {
+      border-bottom: none;
+    }
+    .settings-item-info {
+      flex: 1;
+      overflow: hidden;
+    }
+    .settings-item-title {
+      font-weight: 600;
+      font-size: .9rem;
+      color: var(--text);
+    }
+    .settings-item-sub {
+      font-size: .76rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .settings-select {
+      background: transparent;
+      border: none;
+      outline: none;
+      font-weight: 600;
+      font-size: .86rem;
+      color: var(--text-sec);
+      cursor: pointer;
+      text-align: right;
+      font-family: inherit;
+      padding: 4px 0;
+    }
+    .btn-more-settings {
+      margin-top: 6px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px;
+      font-weight: 600;
+      font-size: .88rem;
+      color: var(--acc);
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+      transition: background .15s, color .15s;
+    }
+    .btn-more-settings:hover {
+      background: var(--acc-light);
+      border-color: var(--acc-border);
+    }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <div class="popup-head">
-    <div class="popup-brand">
-      <div class="logo">👻</div>
-      <span class="popup-title" data-i18n="app_name">Ghost Recorder</span>
+  <!-- 1. MAIN RECORDING VIEW -->
+  <div id="mainView" class="view-panel">
+    <!-- Header -->
+    <div class="popup-head">
+      <div class="popup-brand">
+        <div class="logo">👻</div>
+        <span class="popup-title" data-i18n="app_name">Ghost Recorder</span>
+      </div>
+      <div class="popup-head-actions">
+        <!-- Meetings button moved to top right header next to 3-dots options button -->
+        <button class="popup-head-btn" id="meetingsPillBtn" title="Meetings" data-i18n-title="meetings">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+        </button>
+        <button class="popup-head-btn" id="openSettingsBtn" title="Settings" data-i18n-title="settings">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/>
+          </svg>
+        </button>
+      </div>
     </div>
-    <div class="popup-head-actions">
-      <!-- Meetings button moved to top right header next to 3-dots options button -->
-      <button class="popup-head-btn" id="meetingsPillBtn" title="Meetings" data-i18n-title="meetings">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+
+    <!-- Status Box Card (Top Rounded Card - 12px) -->
+    <div class="status-box">
+      <div class="status-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <div class="status-info">
+        <div class="status-heading" data-i18n="recording_title">Recording</div>
+        <div class="tab-text" id="tabInfo">Checking tab…</div>
+      </div>
+    </div>
+
+    <!-- Mode Selector Card (12px) -->
+    <div class="field-card">
+      <div class="field-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M6 8h12M6 12h12M6 16h8"/>
+        </svg>
+      </div>
+      <select id="modeSelect" class="field-select">
+        <option value="call" data-i18n="rec_mode_call">📞 Call Mode (Both sides)</option>
+        <option value="system_only" data-i18n="rec_mode_system">🔊 System Audio Only (Webinar/Podcast)</option>
+      </select>
+    </div>
+
+    <!-- Microphone Indicator Card (12px) -->
+    <div class="field-card">
+      <div class="mic-info-text" id="micStatus">Checking mic…</div>
+    </div>
+
+    <!-- Timer display -->
+    <div id="timer" class="timer">00:00</div>
+
+    <!-- Main Action Button (12px) -->
+    <button id="startBtn" class="btn-primary" data-i18n="start_recording">Start Capture</button>
+
+    <!-- Recording Controls Row -->
+    <div id="recRow" class="rec-row">
+      <button id="pauseBtn" class="btn-pause" data-i18n="pause_recording">⏸ Pause</button>
+      <button id="stopBtn" class="btn-stop" data-i18n="stop_recording">■ Stop</button>
+    </div>
+
+    <!-- Status Message Text -->
+    <div id="statusText" class="status-msg" data-i18n="ready_status">Ready to capture this meeting</div>
+  </div>
+
+  <!-- 2. QUICK SETTINGS VIEW (Matches Mockup Image) -->
+  <div id="settingsView" class="view-panel" style="display: none;">
+    <!-- Settings Header -->
+    <div class="settings-head">
+      <button class="popup-head-btn" id="backFromSettingsBtn" title="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
         </svg>
       </button>
-      <button class="popup-head-btn" id="openSettingsBtn" title="Settings" data-i18n-title="settings">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/>
-        </svg>
-      </button>
+      <span class="settings-title" data-i18n="settings">Settings</span>
     </div>
-  </div>
 
-  <!-- Status Box Card (Top Rounded Card - 12px) -->
-  <div class="status-box">
-    <div class="status-icon-wrap">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-      </svg>
+    <!-- Settings Options List -->
+    <div class="settings-list">
+      <!-- 1. Video Quality -->
+      <div class="settings-row">
+        <div class="settings-item-info">
+          <div class="settings-item-title" data-i18n="video_quality_label">Video quality</div>
+          <div class="settings-item-sub" data-i18n="video_quality_sub">Select recording resolution</div>
+        </div>
+        <select id="quickQualitySelect" class="settings-select">
+          <option value="1080p">1080p ▾</option>
+          <option value="720p">720p ▾</option>
+          <option value="1440p">1440p ▾</option>
+          <option value="4k">4K ▾</option>
+        </select>
+      </div>
+
+      <!-- 2. Recording Type (Video/Audio or Audio Only) -->
+      <div class="settings-row">
+        <div class="settings-item-info">
+          <div class="settings-item-title" data-i18n="recording_type">Recording type</div>
+          <div class="settings-item-sub" data-i18n="rec_type_sub">Video, audio, or audio only</div>
+        </div>
+        <select id="quickVideoSelect" class="settings-select">
+          <option value="video" data-i18n="rec_type_video">Video/audio ▾</option>
+          <option value="audio_only" data-i18n="rec_type_audio">Audio only ▾</option>
+        </select>
+      </div>
+
+      <!-- 3. AI Provider -->
+      <div class="settings-row">
+        <div class="settings-item-info">
+          <div class="settings-item-title" data-i18n="ai_provider_label">AI Provider</div>
+          <div class="settings-item-sub" data-i18n="ai_provider_sub">Cloud or local AI model</div>
+        </div>
+        <select id="quickProviderSelect" class="settings-select">
+          <option value="gemini">Gemini ▾</option>
+          <option value="openai">OpenAI ▾</option>
+          <option value="claude">Claude ▾</option>
+          <option value="groq">Groq ▾</option>
+          <option value="local">Local ▾</option>
+        </select>
+      </div>
+
+      <!-- 4. Notes Language -->
+      <div class="settings-row">
+        <div class="settings-item-info">
+          <div class="settings-item-title" data-i18n="notes_language_label">Notes language</div>
+          <div class="settings-item-sub" data-i18n="notes_language_sub">Output language for AI notes</div>
+        </div>
+        <select id="quickLangSelect" class="settings-select">
+          <option value="auto">Auto ▾</option>
+          <option value="en">English ▾</option>
+          <option value="es">Español ▾</option>
+          <option value="fr">Français ▾</option>
+          <option value="de">Deutsch ▾</option>
+          <option value="pt">Português ▾</option>
+        </select>
+      </div>
     </div>
-    <div class="status-info">
-      <div class="status-heading" data-i18n="recording_title">Recording</div>
-      <div class="tab-text" id="tabInfo">Checking tab…</div>
-    </div>
+
+    <!-- Advanced Settings Button at the bottom -->
+    <button id="openFullOptionsBtn" class="btn-more-settings" data-i18n="more_settings_btn">
+      Advanced Settings →
+    </button>
   </div>
-
-  <!-- Mode Selector Card (12px) -->
-  <div class="field-card">
-    <div class="field-icon">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="4" width="20" height="16" rx="2"/>
-        <path d="M6 8h12M6 12h12M6 16h8"/>
-      </svg>
-    </div>
-    <select id="modeSelect" class="field-select">
-      <option value="call" data-i18n="rec_mode_call">📞 Call Mode (Both sides)</option>
-      <option value="system_only" data-i18n="rec_mode_system">🔊 System Audio Only (Webinar/Podcast)</option>
-    </select>
-  </div>
-
-  <!-- Microphone Indicator Card (12px) -->
-  <div class="field-card">
-    <div class="mic-info-text" id="micStatus">Checking mic…</div>
-  </div>
-
-  <!-- Timer display -->
-  <div id="timer" class="timer">00:00</div>
-
-  <!-- Main Action Button (12px) -->
-  <button id="startBtn" class="btn-primary" data-i18n="start_recording">Start Capture</button>
-
-  <!-- Recording Controls Row -->
-  <div id="recRow" class="rec-row">
-    <button id="pauseBtn" class="btn-pause" data-i18n="pause_recording">⏸ Pause</button>
-    <button id="stopBtn" class="btn-stop" data-i18n="stop_recording">■ Stop</button>
-  </div>
-
-  <!-- Status Message Text -->
-  <div id="statusText" class="status-msg" data-i18n="ready_status">Ready to capture this meeting</div>
 
   <!-- Hidden Video Toggle & Nav Links for backward compatibility -->
   <input type="checkbox" id="videoToggle" style="display:none" checked>

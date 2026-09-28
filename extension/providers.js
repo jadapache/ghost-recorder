@@ -4,10 +4,11 @@
 
 function normalizeGeminiModel(model) {
   if (!model || typeof model !== 'string') return 'gemini-2.5-flash';
-  const m = model.trim().toLowerCase();
-  if (/^gemini-(?:3|4)/i.test(m) || m.includes('3.1') || m.includes('3.5')) return 'gemini-2.5-flash';
-  if (m === 'gemini-flash') return 'gemini-2.5-flash';
-  if (m === 'gemini-pro') return 'gemini-2.5-pro';
+  const m = model.trim();
+  if (!m) return 'gemini-2.5-flash';
+  const lower = m.toLowerCase();
+  if (lower === 'gemini-flash') return 'gemini-2.5-flash';
+  if (lower === 'gemini-pro') return 'gemini-2.5-pro';
   return m;
 }
 
@@ -15,7 +16,7 @@ function normalizeGeminiModel(model) {
   const GEMINI_BASE = 'https://generativelanguage.googleapis.com';
   const GEMINI_INLINE_MAX = 14 * 1024 * 1024;
   const GROQ_STT_MAX = 24 * 1024 * 1024;
-  const GEMINI_FALLBACKS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro'];
+  const GEMINI_FALLBACKS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-pro'];
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

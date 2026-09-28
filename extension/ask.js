@@ -2,10 +2,11 @@
 // Answers questions grounded ONLY in meeting notes/transcripts, via BYOK or local provider.
 function normalizeGeminiModel(model) {
   if (!model || typeof model !== 'string') return 'gemini-2.5-flash';
-  const m = model.trim().toLowerCase();
-  if (/^gemini-(?:3|4)/i.test(m) || m.includes('3.1') || m.includes('3.5')) return 'gemini-2.5-flash';
-  if (m === 'gemini-flash') return 'gemini-2.5-flash';
-  if (m === 'gemini-pro') return 'gemini-2.5-pro';
+  const m = model.trim();
+  if (!m) return 'gemini-2.5-flash';
+  const lower = m.toLowerCase();
+  if (lower === 'gemini-flash') return 'gemini-2.5-flash';
+  if (lower === 'gemini-pro') return 'gemini-2.5-pro';
   return m;
 }
 
@@ -38,7 +39,7 @@ Answer the user's questions using ONLY the meeting context provided. Rules:
     ];
     (history || []).forEach((h) => contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] }));
     contents.push({ role: 'user', parts: [{ text: question }] });
-    const chain = [normalizeGeminiModel(s.models.gemini), 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro'].filter((m, i, a) => a.indexOf(m) === i);
+    const chain = [normalizeGeminiModel(s.models.gemini), 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-pro'].filter((m, i, a) => a.indexOf(m) === i);
     let lastErr;
     for (const model of chain) {
       const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
