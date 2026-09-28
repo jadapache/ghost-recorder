@@ -14,6 +14,7 @@ let askBusy = false;
 function idb() { return new Promise((res, rej) => { const r = indexedDB.open('ghost', 1); r.onupgradeneeded = () => r.result.createObjectStore('pending', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 async function idbGet(id) { const db = await idb(); return new Promise((res) => { const rq = db.transaction('pending', 'readonly').objectStore('pending').get(id); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); }); }
 async function idbPut(v) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('pending', 'readwrite'); tx.objectStore('pending').put(v); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+async function idbDel(id) { const db = await idb(); return new Promise((res) => { const tx = db.transaction('pending', 'readwrite'); tx.objectStore('pending').delete(id); tx.oncomplete = res; tx.onerror = res; }); }
 
 function load() {
   chrome.storage.local.get(['meetings', 'settings'], ({ meetings: m, settings: s }) => {
@@ -124,6 +125,39 @@ function friendlyError(err) {
   return { fix, raw: e };
 }
 
+async function removeMeeting(id) {
+  const sid = String(id).trim();
+
+  // 1. Delete from IndexedDB immediately
+  try {
+    await idbDel(sid);
+    await idbDel('live-' + sid);
+  } catch (e) {
+    console.warn('[dashboard] idbDel failed:', e);
+  }
+
+  // 2. Delete from chrome.storage.local immediately so refresh never shows it again
+  try {
+    const data = await new Promise((res) => chrome.storage.local.get('meetings', res));
+    const currentList = data.meetings || [];
+    const updated = currentList.filter((x) => String(x.id).trim() !== sid);
+    await new Promise((res) => chrome.storage.local.set({ meetings: updated }, res));
+    await new Promise((res) => chrome.storage.local.remove('caps-' + sid, res));
+    meetings = updated;
+  } catch (e) {
+    console.error('[dashboard] storage delete failed:', e);
+  }
+
+  // 3. Notify background service worker and offscreen
+  chrome.runtime.sendMessage({ action: 'DELETE_MEETING', meetingId: sid }).catch(() => {});
+
+  // 4. Update selectedId and UI
+  if (String(selectedId).trim() === sid) {
+    selectedId = meetings.length ? meetings[0].id : null;
+  }
+  render();
+}
+
 // =============================================================== render
 function render() {
   const list = document.getElementById('list');
@@ -144,7 +178,13 @@ function render() {
       <div class="d">${esc(localDate(m.date))}${m.duration && m.duration !== 'Unknown' ? ' · ' + esc(m.duration) : ''}</div>
       ${badge(m.state)}
     </div>`).join('') || '<div class="empty">No meetings match your search.</div>';
-  list.querySelectorAll('.item').forEach((el) => el.onclick = () => { selectedId = el.dataset.id; currentTab = 'summary'; render(); });
+  list.querySelectorAll('.item').forEach((el) => {
+    el.onclick = () => {
+      selectedId = el.dataset.id;
+      currentTab = 'summary';
+      render();
+    };
+  });
 
   const m = meetings.find((x) => x.id === selectedId);
   const detail = document.getElementById('detail');
@@ -174,12 +214,15 @@ function render() {
   detail.querySelectorAll('.tab').forEach((b) => b.onclick = () => { currentTab = b.dataset.tab; render(); });
   document.getElementById('renameBtn').onclick = () => {
     const t = prompt('Meeting name:', m.title || '');
-    if (t && t.trim()) chrome.runtime.sendMessage({ action: 'RENAME_MEETING', meetingId: m.id, title: t.trim() });
+    if (t && t.trim()) {
+      chrome.runtime.sendMessage({ action: 'RENAME_MEETING', meetingId: m.id, title: t.trim() });
+      m.title = t.trim();
+      render();
+    }
   };
   document.getElementById('deleteBtn').onclick = () => {
     if (confirm('Remove this meeting from the list?\n(Files already saved in Downloads are kept.)')) {
-      chrome.runtime.sendMessage({ action: 'DELETE_MEETING', meetingId: m.id });
-      selectedId = null;
+      removeMeeting(m.id);
     }
   };
 
@@ -605,7 +648,13 @@ async function attachMedia(m) {
 
 // live-update when the background writes new history/state
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.meetings) { meetings = changes.meetings.newValue || []; render(); }
+  if (area === 'local' && changes.meetings) {
+    meetings = changes.meetings.newValue || [];
+    if (selectedId && !meetings.some((x) => String(x.id).trim() === String(selectedId).trim())) {
+      selectedId = meetings.length ? meetings[0].id : null;
+    }
+    render();
+  }
 });
 document.addEventListener('DOMContentLoaded', () => {
   const s = document.getElementById('search');

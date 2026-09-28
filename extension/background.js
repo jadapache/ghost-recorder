@@ -73,8 +73,13 @@ function serialize(task) { const run = storageChain.then(task, task); storageCha
 function upsertMeeting(id, patch) {
   return serialize(async () => {
     const list = await getMeetings();
-    let m = list.find((x) => x.id === id);
-    if (!m) { m = { id, files: {} }; list.unshift(m); }
+    const sid = String(id).trim();
+    let m = list.find((x) => String(x.id).trim() === sid);
+    if (!m) {
+      if (!patch || (!patch.date && patch.state !== 'recording')) return null;
+      m = { id: sid, files: {} };
+      list.unshift(m);
+    }
     const files = patch.files; const rest = Object.assign({}, patch); delete rest.files;
     Object.assign(m, rest);
     if (files) m.files = Object.assign(m.files || {}, files);
@@ -82,7 +87,21 @@ function upsertMeeting(id, patch) {
     return m;
   });
 }
-async function getMeeting(id) { return (await getMeetings()).find((x) => x.id === id); }
+async function getMeeting(id) {
+  const sid = String(id).trim();
+  return (await getMeetings()).find((x) => String(x.id).trim() === sid);
+}
+function deleteMeeting(id) {
+  return serialize(async () => {
+    const sid = String(id).trim();
+    const list = await getMeetings();
+    const updated = list.filter((x) => String(x.id).trim() !== sid);
+    await chrome.storage.local.set({ meetings: updated });
+    await clearCaptions(sid);
+    chrome.runtime.sendMessage({ action: 'DELETE_IDB', target: 'offscreen', id: sid }).catch(() => {});
+    return true;
+  });
+}
 
 // Offscreen document creation & management
 async function hasOffscreen() {
@@ -369,6 +388,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }).catch(() => {});
     })();
     return;
+  }
+  if (message.action === 'DELETE_MEETING') {
+    deleteMeeting(message.meetingId)
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+  if (message.action === 'RENAME_MEETING') {
+    upsertMeeting(message.meetingId, { title: message.title })
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+  if (message.action === 'SET_THUMB') {
+    upsertMeeting(message.meetingId, { thumb: message.thumb }).then(() => sendResponse({ success: true })).catch(() => {});
+    return true;
+  }
+  if (message.action === 'EMAIL_NOTES') {
+    (async () => {
+      const settings = await getSettings();
+      if (!settings.email || !settings.email.trim()) {
+        sendResponse({ error: 'no-email' });
+        return;
+      }
+      const m = await getMeeting(message.meetingId);
+      if (!m || !m.notes) {
+        sendResponse({ error: 'no-notes' });
+        return;
+      }
+      const subject = encodeURIComponent(`Meeting Notes: ${m.title || 'Meeting'}`);
+      const body = encodeURIComponent(m.notes);
+      const to = encodeURIComponent(settings.email.trim());
+      const url = `mailto:${to}?subject=${subject}&body=${body}`;
+      chrome.tabs.create({ url });
+      sendResponse({ success: true });
+    })();
+    return true;
   }
   if (message.action === 'TAB_ENDED') {
     if (recordingState.isRecording && recordingState.meetingId === message.meetingId) stopCapture();
