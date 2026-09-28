@@ -12,7 +12,7 @@ let ctx = null, tabStream = null, micStream = null, recDest = null, mergerNode =
 let audioRecorder = null, videoRecorder = null, audioChunks = [], videoChunks = [];
 let meetingId = null, stopping = false, recStartMs = 0;
 let levelTimer = null, tabLevel = null, micLevel = null, tabHadAudio = false, micHadAudio = false, tabHadAudioTrack = false;
-let silenceWarned = false, levelTicks = 0, persistTimer = null, samplerTimer = null;
+let silenceWarned = false, levelTicks = 0, persistTimer = null, samplerTimer = null, keepAliveTimer = null;
 let tabPeak = 0, micPeak = 0, tabPeakAll = 0, micPeakAll = 0;
 let pausedAt = 0, totalPausedMs = 0;
 let monitorFailures = 0, monitorViaCtx = false;
@@ -218,6 +218,7 @@ function teardownGraph() {
   try { if (samplerTimer) clearInterval(samplerTimer); } catch (e) {}
   try { if (levelTimer) clearInterval(levelTimer); } catch (e) {}
   try { if (persistTimer) clearInterval(persistTimer); } catch (e) {}
+  try { if (keepAliveTimer) clearInterval(keepAliveTimer); } catch (e) {}
   try { if (monitorEl) { monitorEl.pause(); monitorEl.srcObject = null; monitorEl.remove(); monitorEl = null; } } catch (e) {}
   try { if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; } } catch (e) {}
   try { if (tabStream) { tabStream.getTracks().forEach((t) => t.stop()); tabStream = null; } } catch (e) {}
@@ -344,6 +345,11 @@ async function startRecording(streamId, videoEnabled, id, recordMode, videoOptio
       if (audioChunks.length) snap.audio = new Blob(audioChunks, { type: 'audio/webm' });
       if (videoChunks.length) snap.video = new Blob(videoChunks, { type: 'video/webm' });
       if (snap.audio) idbPut(snap).catch((e) => log('live snapshot failed: ' + e.message));
+    }, 20000);
+
+    keepAliveTimer = setInterval(() => {
+      if (stopping || !meetingId) return;
+      chrome.runtime.sendMessage({ action: 'KEEPALIVE', meetingId }).catch(() => {});
     }, 20000);
 
     if (currentRecordMode === 'call') {

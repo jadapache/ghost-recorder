@@ -165,9 +165,9 @@ function render() {
     </div>
     <div class="mv-right">
       <div class="tabs">
-        <button class="tab ${currentTab === 'summary' ? 'on' : ''}" data-tab="summary">SUMMARY</button>
-        <button class="tab ${currentTab === 'transcript' ? 'on' : ''}" data-tab="transcript">TRANSCRIPT</button>
-        <button class="tab ${currentTab === 'ask' ? 'on' : ''}" data-tab="ask">✨ ASK AI</button>
+        <button class="tab ${currentTab === 'summary' ? 'on sel' : ''}" data-tab="summary">${self.GhostI18n ? self.GhostI18n.t('tab_summary') : 'SUMMARY'}</button>
+        <button class="tab ${currentTab === 'transcript' ? 'on sel' : ''}" data-tab="transcript">${self.GhostI18n ? self.GhostI18n.t('tab_transcript') : 'TRANSCRIPT'}</button>
+        <button class="tab ${currentTab === 'ask' ? 'on sel' : ''}" data-tab="ask">${self.GhostI18n ? self.GhostI18n.t('tab_ask') : '✨ ASK AI'}</button>
       </div>
       <div id="tabc" class="${currentTab === 'ask' ? 'askpane' : ''}"></div>
     </div>`;
@@ -383,14 +383,27 @@ function renderSummary(m, tabc) {
     <div class="actions">
       ${m.notes ? `<button class="btn ghost" id="copySum">📄 Copy summary</button>` : ''}
       ${m.notes ? `<button class="btn" id="emailBtn">📧 Email notes</button>` : ''}
-      ${f.video || f.audio || f.notes ? `<button class="btn ghost" id="showBtn">📁 Show files in folder</button>` : ''}
+      ${f.video || f.audio || f.notes || f.vtt || f.transcript ? `<button class="btn ghost" id="showBtn">📁 Show files in folder</button>` : ''}
       ${m.state === 'error' ? `<button class="btn retry" id="retryBtn">↻ Retry AI</button>` : ''}
     </div>
     <div id="regen"></div>
     ${warn}${body}`;
 
   const showBtn = document.getElementById('showBtn');
-  if (showBtn) showBtn.onclick = () => { const any = f.notes || f.video || f.audio; if (any) chrome.downloads.show(any.downloadId); };
+  if (showBtn) showBtn.onclick = () => {
+    const any = f.notes || f.video || f.audio || f.vtt || f.transcript;
+    if (any) {
+      if (typeof any === 'object' && any.downloadId) {
+        chrome.downloads.show(any.downloadId);
+      } else if (typeof any === 'number') {
+        chrome.downloads.show(any);
+      } else if (typeof any === 'string') {
+        chrome.downloads.search({ query: [any] }, (items) => {
+          if (items && items[0]) chrome.downloads.show(items[0].id);
+        });
+      }
+    }
+  };
   const emailBtn = document.getElementById('emailBtn');
   if (emailBtn) emailBtn.onclick = () => chrome.runtime.sendMessage({ action: 'EMAIL_NOTES', meetingId: m.id }, (r) => {
     if (r && r.error === 'no-email') { emailBtn.textContent = 'Add your email in Settings first'; setTimeout(() => { emailBtn.textContent = '📧 Email notes'; }, 3000); }
@@ -401,17 +414,81 @@ function renderSummary(m, tabc) {
   if (copySum) copySum.onclick = () => { navigator.clipboard.writeText(splitNotes(m.notes).summary).then(() => { copySum.textContent = '✓ Copied'; setTimeout(() => { copySum.textContent = '📄 Copy summary'; }, 1600); }); };
 }
 
-function renderTranscriptTab(m, tabc) {
-  const { transcript } = splitNotes(m.notes);
-  if (!transcript) { tabc.innerHTML = '<p class="muted">No transcript yet' + (m.state === 'processing' ? ' — AI is still working.' : '.') + '</p><div id="regen"></div>'; return; }
+function downloadBlob(filename, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+}
+
+function transcriptToVtt(text) {
+  let vtt = 'WEBVTT - Ghost Recorder Subtitles\n\n';
+  let idx = 1;
+  const lines = (text || '').split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const m = TS_RE.exec(line);
+    if (m && (m[4] || m[5])) {
+      const secs = m[3] != null ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) : (+m[1]) * 60 + (+m[2]);
+      const sH = Math.floor(secs / 3600), sM = Math.floor((secs % 3600) / 60), sS = secs % 60;
+      const start = `${String(sH).padStart(2, '0')}:${String(sM).padStart(2, '0')}:${String(sS).padStart(2, '0')}.000`;
+      const endSecs = secs + 3;
+      const eH = Math.floor(endSecs / 3600), eM = Math.floor((endSecs % 3600) / 60), eS = endSecs % 60;
+      const end = `${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}:${String(eS).padStart(2, '0')}.000`;
+      const spk = (m[4] ? m[4].trim() : 'Speaker').replace(/\*\*/g, '');
+      const txt = (m[5] ? m[5].trim() : '');
+      vtt += `${idx}\n${start} --> ${end}\n<v ${spk}>${txt}</v>\n\n`;
+      idx++;
+    }
+  }
+  return vtt;
+}
+
+async function renderTranscriptTab(m, tabc) {
+  let transcript = splitNotes(m.notes).transcript;
+  if (!transcript && m.captions) transcript = m.captions;
+  if (!transcript) {
+    const rec = await idbGet(m.id);
+    if (rec && rec.captions) transcript = rec.captions;
+  }
+
+  if (!transcript) {
+    tabc.innerHTML = '<p class="muted">No transcript yet' + (m.state === 'processing' ? ' — AI is still working.' : '.') + '</p><div id="regen"></div>';
+    return;
+  }
+
+  const safeTitle = (m.title || 'meeting').replace(/[/\\?%*:|"<>]/g, '-').slice(0, 50);
+
   tabc.innerHTML = `
     <div class="actions">
       <button class="btn ghost" id="copyTr">📄 Copy transcript</button>
+      <button class="btn ghost" id="dlTxtTr">📥 Download .txt</button>
+      <button class="btn ghost" id="dlVttTr">📥 Download .vtt (Subtitles)</button>
       <span class="muted" style="align-self:center;font-size:.75rem">Click any line to jump the player</span>
     </div>
     <div id="regen"></div>
     <div class="transcript tall" id="transcript">${renderTranscript(transcript)}</div>`;
-  document.getElementById('copyTr').onclick = () => { navigator.clipboard.writeText(transcript).then(() => { const b = document.getElementById('copyTr'); b.textContent = '✓ Copied'; setTimeout(() => { b.textContent = '📄 Copy transcript'; }, 1600); }); };
+
+  document.getElementById('copyTr').onclick = () => {
+    navigator.clipboard.writeText(transcript).then(() => {
+      const b = document.getElementById('copyTr');
+      b.textContent = '✓ Copied';
+      setTimeout(() => { b.textContent = '📄 Copy transcript'; }, 1600);
+    });
+  };
+
+  document.getElementById('dlTxtTr').onclick = () => {
+    downloadBlob(`${safeTitle}-transcript.txt`, transcript, 'text/plain');
+  };
+
+  document.getElementById('dlVttTr').onclick = () => {
+    const vtt = transcriptToVtt(transcript);
+    downloadBlob(`${safeTitle}-captions.vtt`, vtt, 'text/vtt');
+  };
 }
 
 // ---- Ask AI (Fathom-style) ----
@@ -489,8 +566,18 @@ async function attachMedia(m) {
     const blob = rec.video || rec.audio;
     mediaUrl = URL.createObjectURL(blob);
     const tag = rec.video ? 'video' : 'audio';
+
+    let trackHtml = '';
+    let trText = splitNotes(m.notes).transcript || m.captions;
+    if (!trText && rec && rec.captions) trText = rec.captions;
+    if (tag === 'video' && trText) {
+      const vtt = transcriptToVtt(trText);
+      const trackUrl = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
+      trackHtml = `<track label="Subtitles" kind="subtitles" srclang="auto" src="${trackUrl}" default>`;
+    }
+
     holder.innerHTML = `
-      <${tag} id="media" src="${mediaUrl}" controls preload="metadata" ${tag === 'video' ? 'class="vid"' : 'style="width:100%"'}></${tag}>
+      <${tag} id="media" src="${mediaUrl}" controls preload="metadata" ${tag === 'video' ? 'class="vid"' : 'style="width:100%"'}>${trackHtml}</${tag}>
       <div class="speed">Speed:
         ${[1, 1.25, 1.5, 2].map((s) => `<button class="btn ghost mini spd ${s === 1 ? 'on' : ''}" data-s="${s}">${s}×</button>`).join('')}
       </div>`;

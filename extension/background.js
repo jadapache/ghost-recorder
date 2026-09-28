@@ -115,35 +115,96 @@ async function saveFile(meetingId, kind, blob) {
   const settings = await getSettings();
   const baseFolder = sanitizeName(settings.saveFolder || 'Ghost Recordings');
   const subFolder = (m && m.folder) || folderName(new Date(m ? m.date : Date.now()), (m && m.platform) || 'Meeting');
-  const ext = kind === 'video' ? 'webm' : (kind === 'audio' ? 'webm' : (kind === 'notes' ? 'md' : 'txt'));
-  const filename = `${baseFolder}/${subFolder}/${kind}.${ext}`;
+  let ext = 'txt';
+  let filenameBase = kind;
+  if (kind === 'video') ext = 'webm';
+  else if (kind === 'audio') ext = 'webm';
+  else if (kind === 'notes') ext = 'md';
+  else if (kind === 'vtt') { ext = 'vtt'; filenameBase = 'captions'; }
+  else if (kind === 'transcript') { ext = 'txt'; filenameBase = 'transcript'; }
+
+  const filename = `${baseFolder}/${subFolder}/${filenameBase}.${ext}`;
 
   const reader = new FileReader();
   reader.onload = () => {
     const dataUrl = reader.result;
     chrome.downloads.download({ url: dataUrl, filename, saveAs: false }, (downloadId) => {
       if (chrome.runtime.lastError) console.error('Download failed:', chrome.runtime.lastError.message);
-      else upsertMeeting(meetingId, { files: { [kind]: filename } });
+      else upsertMeeting(meetingId, { files: { [kind]: { filename, downloadId } } });
     });
   };
   reader.readAsDataURL(blob);
 }
 
-// ---- caption buffer in storage ---------------------------------------------
-async function appendCaption(id, line) {
+// ---- caption buffer in storage & WebVTT generator ---------------------------
+function formatVttTimestamp(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const msec = Math.floor(ms % 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(msec).padStart(3, '0')}`;
+}
+
+function buildVttContent(cues) {
+  let vtt = 'WEBVTT - Ghost Recorder Meeting Captions\n\n';
+  let idx = 1;
+  for (const c of cues) {
+    const text = (c.text || '').trim();
+    if (!text) continue;
+    const start = formatVttTimestamp(c.startMs || 0);
+    const end = formatVttTimestamp(Math.max((c.startMs || 0) + 1200, c.endMs || ((c.startMs || 0) + 2500)));
+    const speaker = (c.speaker || 'Speaker').trim();
+    vtt += `${idx}\n${start} --> ${end}\n<v ${speaker}>${text}</v>\n\n`;
+    idx++;
+  }
+  return vtt;
+}
+
+function buildTxtTranscript(cues) {
+  return cues.map((c) => {
+    if (typeof c === 'string') return c;
+    const s = Math.max(0, Math.floor((c.startMs || 0) / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const stamp = (h ? `${h}:` : '') + `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `[${stamp}] ${(c.speaker || 'Speaker').trim()}: ${(c.text || '').trim()}`;
+  }).join('\n');
+}
+
+async function appendCaption(id, cue) {
   return serialize(async () => {
     const key = `caps-${id}`;
     const data = await new Promise((res) => chrome.storage.local.get(key, res));
     const list = data[key] || [];
-    list.push(line);
-    await chrome.storage.local.set({ [key]: list.slice(-500) });
+    list.push(cue);
+    await chrome.storage.local.set({ [key]: list.slice(-2000) });
   });
 }
-async function readCaptions(id) {
+
+async function readCaptionCues(id) {
   const key = `caps-${id}`;
   const data = await new Promise((res) => chrome.storage.local.get(key, res));
-  return (data[key] || []).join('\n');
+  const rawList = data[key] || [];
+  return rawList.map((item) => {
+    if (typeof item === 'object' && item && item.text) return item;
+    if (typeof item === 'string') {
+      const m = item.match(/^\s*\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s*([^:]+):\s*(.*)$/);
+      if (m) {
+        const sec = m[3] != null ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) : (+m[1]) * 60 + (+m[2]);
+        return { speaker: m[4].trim(), text: m[5].trim(), startMs: sec * 1000, endMs: (sec + 3) * 1000, line: item };
+      }
+      return { speaker: 'Speaker', text: item, startMs: 0, endMs: 2000, line: item };
+    }
+    return null;
+  }).filter(Boolean);
 }
+
+async function readCaptions(id) {
+  const cues = await readCaptionCues(id);
+  if (!cues.length) return '';
+  return buildTxtTranscript(cues);
+}
+
 async function clearCaptions(id) {
   await chrome.storage.local.remove(`caps-${id}`);
 }
@@ -213,14 +274,22 @@ async function stopCapture() {
   if (!id) return;
   if (recordingState.pausedAt) { recordingState.startTime += Date.now() - recordingState.pausedAt; recordingState.pausedAt = null; }
   const settings = await getSettings();
-  const captions = await readCaptions(id);
+  const cues = await readCaptionCues(id);
+  const captions = cues.length ? buildTxtTranscript(cues) : await readCaptions(id);
   const meta = await buildMeta(id);
+
+  if (cues.length > 0) {
+    const vttContent = buildVttContent(cues);
+    const txtContent = buildTxtTranscript(cues);
+    saveFile(id, 'vtt', new Blob([vttContent], { type: 'text/vtt' }));
+    saveFile(id, 'transcript', new Blob([txtContent], { type: 'text/plain' }));
+  }
 
   chrome.runtime.sendMessage({ action: 'STOP_RECORDING', target: 'offscreen', data: { captions, settings, meta } }).catch(() => {});
 
   if (recordingState.tabId) chrome.tabs.sendMessage(recordingState.tabId, { action: 'HIDE_UI' }).catch(() => {});
 
-  await upsertMeeting(id, { state: 'processing', duration: meta.duration });
+  await upsertMeeting(id, { state: 'processing', duration: meta.duration, captions: captions || '' });
   recordingState = { isRecording: false, tabId: null, meetingId: null, startTime: null, videoEnabled: true, platform: 'Unknown', pausedAt: null };
   chrome.storage.local.set({ isRecording: false, meetingId: null, tabId: null, startTime: null });
 
@@ -255,8 +324,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'PAUSE_CAPTURE') { pauseCapture(true); sendResponse({ success: true }); return; }
   if (message.action === 'RESUME_CAPTURE') { pauseCapture(false); sendResponse({ success: true }); return; }
 
+  if (message.action === 'KEEPALIVE') {
+    sendResponse({ alive: true, timestamp: Date.now() });
+    return true;
+  }
+
   if (message.action === 'APPEND_CAPTION') {
-    if (recordingState.meetingId) appendCaption(recordingState.meetingId, message.line);
+    if (recordingState.meetingId) appendCaption(recordingState.meetingId, message.cue || message.line);
     return;
   }
   if (message.action === 'SAVE_FILE') {
@@ -264,6 +338,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
   if (message.action === 'NOTES_READY') {
+    if (message.notes) {
+      saveFile(message.meetingId, 'notes', new Blob([message.notes], { type: 'text/markdown' }));
+    }
     upsertMeeting(message.meetingId, { state: 'done', notes: message.notes, model: message.model, provider: message.provider, warnings: message.warnings || [] }).then(async () => {
       chrome.notifications.create('notes-ready-' + message.meetingId, {
         type: 'basic', iconUrl: 'icons/icon128.png', title: 'Ghost Recorder — Notes Ready',

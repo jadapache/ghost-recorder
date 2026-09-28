@@ -193,43 +193,167 @@
   function stopOverlayTimer() { if (overlayTimer) { clearInterval(overlayTimer); overlayTimer = null; } }
   function setHint(t) { if (shadow) { const h = shadow.getElementById('h'); if (h) h.textContent = t; } }
 
-  // ---- Google Meet caption scraper ----
-  let captionObserver = null, startMs = 0; const finalized = new Map();
+  // ---- Robust Multilingual Caption Scraper (Meet / Teams / Zoom) ----
+  let captionObserver = null, captionCheckInterval = null, startMs = 0;
+  let activeTurn = null; // { speaker, text, startMs, endMs, lastUpdate }
+  let turnDebounceTimer = null;
+  const recentTexts = new Set(); // Prevent duplicates
+
   function fmtTs(ms) {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
     const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
     return (h ? h + ':' + String(m).padStart(2, '0') : String(m).padStart(2, '0')) + ':' + String(s).padStart(2, '0');
   }
-  function saveCaptionLine(speaker, text) {
-    if (!text) return;
-    const line = `[${fmtTs(Date.now() - startMs)}] ${speaker}: ${text}`;
-    chrome.runtime.sendMessage({ action: 'APPEND_CAPTION', line }).catch(() => {});
+
+  function escHtml(str) {
+    return (str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
-  function startCaptionScraper() {
-    stopCaptionScraper(); finalized.clear();
-    const tick = () => {
-      const container = document.querySelector('#live-transcription-subtitle') || document.querySelector('[class*="live-transcription" i]') || document.querySelector('[aria-label*="captions" i]');
-      if (!container) return;
-      captionObserver = new MutationObserver(() => {
-        try {
-          const blocks = container.querySelectorAll('[class*="subtitle" i], [class*="caption" i], div');
-          blocks.forEach((b, idx) => {
-            const spEl = b.querySelector('strong, [class*="name" i], [class*="speaker" i]');
-            const txtEl = b.querySelector('span:last-child, p') || b;
-            const speaker = (spEl ? spEl.textContent : 'Speaker').trim() || 'Speaker';
-            const text = (txtEl ? txtEl.textContent : b.textContent).replace(speaker, '').trim();
-            if (text.length > 5) {
-              const key = `${speaker}-${idx}`;
-              if (finalized.get(key) !== text) { finalized.set(key, text); saveCaptionLine(speaker, text); }
-            }
-          });
-        } catch (e) { /* */ }
+
+  function commitTurn() {
+    if (!activeTurn) return;
+    const { speaker, text, startMs: sMs, endMs: eMs } = activeTurn;
+    activeTurn = null;
+    const cleanText = (text || '').trim();
+    if (cleanText.length < 2) return;
+
+    const hash = `${speaker}:::${cleanText.toLowerCase()}`;
+    if (recentTexts.has(hash)) return;
+    recentTexts.add(hash);
+    if (recentTexts.size > 300) {
+      const first = recentTexts.values().next().value;
+      recentTexts.delete(first);
+    }
+
+    const line = `[${fmtTs(sMs)}] ${speaker}: ${cleanText}`;
+    const cue = { speaker, text: cleanText, startMs: sMs, endMs: eMs || (sMs + 2000), line };
+
+    chrome.runtime.sendMessage({ action: 'APPEND_CAPTION', cue, line }).catch(() => {});
+
+    if (transcriptBox) {
+      if (transcriptBox.textContent.includes('Listening…') || transcriptBox.textContent.includes('Escuchando…')) {
+        transcriptBox.textContent = '';
+      }
+      const p = document.createElement('div');
+      p.style.cssText = 'margin-bottom: 5px; line-height: 1.4;';
+      p.innerHTML = `<span style="color:#38bdf8;font-size:11px;font-family:monospace;">[${fmtTs(sMs)}]</span> <strong style="color:#a5b4fc;">${escHtml(speaker)}:</strong> <span>${escHtml(cleanText)}</span>`;
+      transcriptBox.appendChild(p);
+      transcriptBox.scrollTop = transcriptBox.scrollHeight;
+    }
+  }
+
+  function handleCaptionChange(speaker, text) {
+    const now = Math.max(0, Date.now() - startMs);
+    let cleanText = (text || '').trim();
+    if (!cleanText) return;
+    if (speaker && cleanText.startsWith(speaker)) {
+      cleanText = cleanText.slice(speaker.length).trim();
+    }
+    if (!cleanText) return;
+
+    const spk = (speaker || 'Speaker').trim() || 'Speaker';
+
+    if (activeTurn && activeTurn.speaker === spk) {
+      if (cleanText.length >= activeTurn.text.length || !activeTurn.text.includes(cleanText)) {
+        activeTurn.text = cleanText;
+        activeTurn.endMs = now;
+        activeTurn.lastUpdate = Date.now();
+      }
+    } else {
+      commitTurn();
+      activeTurn = {
+        speaker: spk,
+        text: cleanText,
+        startMs: now,
+        endMs: now + 1500,
+        lastUpdate: Date.now()
+      };
+    }
+
+    if (turnDebounceTimer) clearTimeout(turnDebounceTimer);
+    turnDebounceTimer = setTimeout(() => {
+      commitTurn();
+    }, 2500);
+  }
+
+  function findCaptionContainer() {
+    return document.querySelector('#live-transcription-subtitle') ||
+      document.querySelector('div[jscontroller="D1tHje"]') ||
+      document.querySelector('div[jsname="YSxPC"]') ||
+      document.querySelector('div[class*="a4bIc"]') ||
+      document.querySelector('div[class*="nMx2b"]') ||
+      document.querySelector('[data-tid="closed-captions-renderer"]') ||
+      document.querySelector('.closed-caption-container') ||
+      document.querySelector('div[aria-live="polite"][class*="caption" i]') ||
+      document.querySelector('div[aria-label*="caption" i], div[aria-label*="subtítulo" i]');
+  }
+
+  function parseContainer(container) {
+    // 1. Google Meet standard blocks
+    const meetRows = container.querySelectorAll('div[class*="nMx2b"], div[class*="T4LgNb"], div[class*="a4bIc"] > div, div[role="region"], div[jsname="YSxPC"]');
+    if (meetRows.length > 0) {
+      meetRows.forEach((row) => {
+        const spEl = row.querySelector('[jsname="r4nke"], [class*="zs75bd"], [class*="jxFHg"], [class*="VbkSUe"], strong, [class*="speaker" i], [class*="name" i]');
+        const txtEl = row.querySelector('[jsname="YSxPC"], [class*="iOzk7"], [class*="bh44bd"], span:last-child, p') || row;
+        const speaker = (spEl ? spEl.textContent : '').trim() || 'Speaker';
+        let text = (txtEl ? txtEl.textContent : row.textContent || '').trim();
+        handleCaptionChange(speaker, text);
       });
-      captionObserver.observe(container, { childList: true, subtree: true, characterData: true });
-    };
-    setTimeout(tick, 3000);
+      return;
+    }
+
+    // 2. Microsoft Teams blocks
+    const teamsRows = container.querySelectorAll('[data-tid="closed-captions-message"], [class*="ui-chat__message"]');
+    if (teamsRows.length > 0) {
+      teamsRows.forEach((row) => {
+        const spEl = row.querySelector('[data-tid="caption-speaker-name"], [class*="author" i], strong');
+        const txtEl = row.querySelector('[data-tid="caption-text"], [class*="text" i]') || row;
+        const speaker = (spEl ? spEl.textContent : '').trim() || 'Speaker';
+        let text = (txtEl ? txtEl.textContent : row.textContent || '').trim();
+        handleCaptionChange(speaker, text);
+      });
+      return;
+    }
+
+    // 3. Fallback generic blocks
+    const genericBlocks = container.querySelectorAll('[class*="subtitle" i], [class*="caption" i], p, div');
+    genericBlocks.forEach((b) => {
+      const spEl = b.querySelector('strong, [class*="name" i], [class*="speaker" i]');
+      const txtEl = b.querySelector('span:last-child, p') || b;
+      const speaker = (spEl ? spEl.textContent : '').trim() || 'Speaker';
+      let text = (txtEl ? txtEl.textContent : b.textContent || '').trim();
+      if (text.length > 2) handleCaptionChange(speaker, text);
+    });
   }
-  function stopCaptionScraper() { if (captionObserver) { captionObserver.disconnect(); captionObserver = null; } }
+
+  function startCaptionScraper() {
+    stopCaptionScraper();
+    recentTexts.clear();
+    activeTurn = null;
+
+    let attachedContainer = null;
+    const attachObserver = () => {
+      const container = findCaptionContainer();
+      if (container && container !== attachedContainer) {
+        if (captionObserver) captionObserver.disconnect();
+        attachedContainer = container;
+        captionObserver = new MutationObserver(() => {
+          try { parseContainer(container); } catch (e) { /* */ }
+        });
+        captionObserver.observe(container, { childList: true, subtree: true, characterData: true });
+        try { parseContainer(container); } catch (e) { /* */ }
+      }
+    };
+
+    captionCheckInterval = setInterval(attachObserver, 2000);
+    attachObserver();
+  }
+
+  function stopCaptionScraper() {
+    commitTurn();
+    if (turnDebounceTimer) { clearTimeout(turnDebounceTimer); turnDebounceTimer = null; }
+    if (captionCheckInterval) { clearInterval(captionCheckInterval); captionCheckInterval = null; }
+    if (captionObserver) { captionObserver.disconnect(); captionObserver = null; }
+  }
 
   // ---- meeting-mute mirror ----
   let muteTimer = null, lastMuteState = null;
