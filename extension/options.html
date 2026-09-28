@@ -5,45 +5,127 @@
   <title data-i18n="settings_title">Ghost Recorder — Settings</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: linear-gradient(160deg, #0b1220 0%, #101a2e 100%); color: #e2e8f0; margin: 0; padding: 36px 40px; min-height: 100vh; }
-    .wrap { max-width: 640px; margin: 0 auto; }
-    .head { display: flex; align-items: center; gap: 12px; }
-    .logo { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #38bdf8, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 20px; flex: none; }
-    h1 { color: #e2e8f0; font-size: 1.35rem; margin: 0; }
-    a.mtg { margin-left: auto; color: #38bdf8; text-decoration: none; font-weight: 600; background: rgba(56,189,248,.1); padding: 8px 14px; border-radius: 9px; }
-    a.mtg:hover { background: rgba(56,189,248,.18); }
-    .sub { color: #64748b; margin: 8px 0 24px; font-size: .88rem; }
+    :root {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --panel2: #f1f5f9;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --text: #0f172a;
+      --text-sec: #334155;
+      --text-muted: #64748b;
+      --acc: #2563eb;
+      --acc-hover: #1d4ed8;
+      --acc-light: #eff6ff;
+      --acc-border: #bfdbfe;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 40px 24px;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 680px; margin: 0 auto; }
+    .head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+    .logo { width: 38px; height: 38px; border-radius: 9px; background: linear-gradient(135deg, #38bdf8, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none; box-shadow: 0 2px 6px rgba(56,189,248,0.25); }
+    h1 { color: var(--text); font-size: 1.4rem; font-weight: 700; letter-spacing: -.3px; margin: 0; }
+    a.mtg {
+      margin-left: auto;
+      color: var(--acc);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: .88rem;
+      background: var(--acc-light);
+      border: 1px solid var(--acc-border);
+      padding: 8px 16px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all .15s ease;
+    }
+    a.mtg:hover { background: #dbeafe; border-color: #93c5fd; }
+    .sub { color: var(--text-muted); margin: 6px 0 26px; font-size: .9rem; line-height: 1.45; }
+    .card { background: #ffffff; border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+    .subcard { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-top: 16px; }
     .field { margin-bottom: 20px; }
-    label { display: block; font-size: .85rem; color: #94a3b8; margin-bottom: 7px; font-weight: 600; }
+    .field:last-child { margin-bottom: 0; }
+    label { display: block; font-size: .86rem; color: var(--text-sec); margin-bottom: 7px; font-weight: 600; }
     input[type=text], input[type=password], input[type=email], select {
-      width: 100%; box-sizing: border-box; padding: 11px 13px; border-radius: 9px; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; font-size: .95rem; }
-    input:focus, select:focus { outline: none; border-color: #38bdf8; }
-    .hint { font-size: .76rem; color: #64748b; margin-top: 6px; }
-    .hint a { color: #38bdf8; }
-    .row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #1e293b; border-radius: 9px; }
-    .switch { position: relative; width: 46px; height: 26px; flex: none; }
+      width: 100%; box-sizing: border-box; padding: 10px 14px; border-radius: 9px; background: #ffffff; border: 1px solid var(--line-strong); color: var(--text); font-size: .92rem; outline: none; transition: border-color .15s, box-shadow .15s; }
+    input:focus, select:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-light); }
+    .hint { font-size: .78rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+    .hint a { color: var(--acc); font-weight: 500; }
+    .row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; gap: 12px; }
+    .switch { position: relative; width: 44px; height: 24px; flex: none; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; inset: 0; background: #334155; border-radius: 26px; cursor: pointer; transition: .3s; }
-    .slider:before { content: ""; position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
-    input:checked + .slider { background: #2563eb; }
+    .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 24px; cursor: pointer; transition: .25s; }
+    .slider:before { content: ""; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .25s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+    input:checked + .slider { background: var(--acc); }
     input:checked + .slider:before { transform: translateX(20px); }
-    .btn { background: #2563eb; color: #fff; border: 0; padding: 12px 22px; border-radius: 9px; font-weight: 700; font-size: .95rem; cursor: pointer; }
-    .btn:hover { background: #1d4ed8; } .btn.ghost { background: #334155; }
-    #saved, #micMsg { font-size: .85rem; margin-left: 12px; }
-    #saved { color: #34d399; opacity: 0; transition: opacity .2s; } #saved.show { opacity: 1; }
-    .card { background: #111827; border: 1px solid #233148; border-radius: 12px; padding: 18px 20px; margin-bottom: 22px; }
-    .subcard { background: #1a2333; border: 1px solid #2d3b55; border-radius: 9px; padding: 14px; margin-top: 14px; }
-    .hidden { display: none; }
-    .chip { display: inline-block; background: #334155; color: #38bdf8; font-size: .78rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; margin: 3px 4px 3px 0; cursor: pointer; }
-    .chip:hover { background: #2563eb; color: #fff; }
+    .btn { background: var(--acc); color: #fff; border: 0; padding: 11px 20px; border-radius: 9px; font-weight: 600; font-size: .9rem; cursor: pointer; transition: background .15s ease; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:hover { background: var(--acc-hover); }
+    .btn.ghost { background: var(--panel2); color: var(--text-sec); border: 1px solid var(--line-strong); }
+    .btn.ghost:hover { background: #ffffff; color: var(--text); border-color: #94a3b8; }
+    #saved, #micMsg { font-size: .88rem; margin-left: 12px; font-weight: 500; }
+    #saved { color: #16a34a; opacity: 0; transition: opacity .2s; } #saved.show { opacity: 1; }
+    .hidden { display: none !important; }
+
+    /* Custom Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px 26px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      transform: translateY(6px) scale(0.98);
+      transition: transform .18s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .modal-overlay.active .modal-card {
+      transform: translateY(0) scale(1);
+    }
+    .modal-title { font-weight: 700; font-size: 1.12rem; color: var(--text); }
+    .modal-body { color: var(--text-sec); font-size: .9rem; line-height: 1.5; white-space: pre-wrap; }
+    .modal-input { width: 100%; padding: 10px 14px; border-radius: 9px; border: 1px solid var(--line-strong); outline: none; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="head">
-      <div class="logo">👻</div>
+      <div class="logo">
+        👻
+      </div>
       <h1 data-i18n="settings_title">Ghost Recorder — Settings</h1>
-      <a class="mtg" href="dashboard.html" target="_blank" data-i18n="meetings">📋 Meetings</a>
+      <a class="mtg" href="dashboard.html" target="_blank" data-i18n="meetings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Meetings
+      </a>
     </div>
     <p class="sub" data-i18n="sub_tagline">One-click meeting recorder for any platform. High-res video, local AI models (llama.cpp / Faster-Whisper), zero telemetry.</p>
 
@@ -66,11 +148,13 @@
       </div>
 
       <div class="field" id="apiKeyField">
-        <label for="apiKey"><span data-i18n="api_key">API key</span> <span style="color:#fbbf24" id="keyReqNotice">(required for cloud AI notes)</span></label>
+        <label for="apiKey"><span data-i18n="api_key">API key</span> <span style="color:#d97706" id="keyReqNotice">(required for cloud AI notes)</span></label>
         <div style="display:flex;gap:8px">
           <input type="password" id="apiKey" placeholder="Paste your key" autocomplete="off" style="flex:1">
-          <button class="btn ghost" id="revealBtn" type="button" title="Show/hide" style="padding:11px 14px">👁</button>
-          <button class="btn ghost" id="testBtn" type="button" style="padding:11px 16px">Test</button>
+          <button class="btn ghost" id="revealBtn" type="button" title="Show/hide" style="padding:10px 14px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="btn ghost" id="testBtn" type="button" style="padding:10px 16px">Test</button>
         </div>
         <div class="hint" id="keyHint"></div>
         <div class="hint" id="testResult"></div>
@@ -86,7 +170,7 @@
 
       <!-- Dedicated Local Engine Configurator (llama.cpp + Faster-Whisper) -->
       <div class="subcard hidden" id="localManagerCard">
-        <div style="font-weight:700;color:#38bdf8;margin-bottom:10px">🖥️ Local AI Engine Setup (llama.cpp & Faster-Whisper)</div>
+        <div style="font-weight:700;color:var(--acc);margin-bottom:10px">🖥️ Local AI Engine Setup (llama.cpp & Faster-Whisper)</div>
         
         <!-- Local STT Engine -->
         <div class="field">
@@ -129,13 +213,13 @@
 
       <!-- Chrome Built-in AI Card -->
       <div class="subcard hidden" id="chromeAiCard">
-        <label>✨ Chrome On-Device Gemini Nano</label>
-        <div style="font-size:.84rem;color:#cbd5e1;margin:6px 0" id="chromeAiStatusText">Checking Chrome AI status…</div>
+        <label style="color:var(--acc)">✨ Chrome On-Device Gemini Nano</label>
+        <div style="font-size:.84rem;color:var(--text-sec);margin:6px 0" id="chromeAiStatusText">Checking Chrome AI status…</div>
         <button type="button" class="btn ghost" id="downloadChromeAiBtn">Download Gemini Nano</button>
         <div id="chromeAiProgressWrap" class="hidden" style="margin-top:10px">
-          <div style="font-size:.82rem;color:#38bdf8" id="chromeAiProgressText">Downloading on-device model…</div>
-          <div class="progress-bar-bg" style="width:100%;height:8px;background:#334155;border-radius:4px;overflow:hidden;margin-top:6px">
-            <div id="chromeAiProgressBar" style="height:100%;background:linear-gradient(90deg, #38bdf8, #6366f1);width:0%"></div>
+          <div style="font-size:.82rem;color:var(--acc)" id="chromeAiProgressText">Downloading on-device model…</div>
+          <div class="progress-bar-bg" style="width:100%;height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:6px">
+            <div id="chromeAiProgressBar" style="height:100%;background:linear-gradient(90deg, #2563eb, #6366f1);width:0%"></div>
           </div>
         </div>
       </div>
@@ -170,7 +254,7 @@
       <div class="field">
         <label data-i18n="record_video">Record video</label>
         <div class="row">
-          <span style="font-size:.9rem;color:#cbd5e1" data-i18n="off_audio_only">Off = audio only (lighter)</span>
+          <span style="font-size:.9rem;color:var(--text-sec)" data-i18n="off_audio_only">Off = audio only (lighter)</span>
           <label class="switch"><input type="checkbox" id="videoEnabled"><span class="slider"></span></label>
         </div>
       </div>
@@ -222,21 +306,24 @@
     <div class="field">
       <label data-i18n="microphone_label">Microphone (records YOUR voice; remote audio is captured automatically)</label>
       <div class="row">
-        <span style="font-size:.9rem;color:#cbd5e1" data-i18n="grant_mic_hint">Grant mic access once so your side is recorded</span>
-        <button class="btn ghost" id="micBtn" data-i18n="enable_mic">🎤 Enable mic</button>
+        <span style="font-size:.9rem;color:var(--text-sec)" data-i18n="grant_mic_hint">Grant mic access once so your side is recorded</span>
+        <button class="btn ghost" id="micBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          <span data-i18n="enable_mic">Enable mic</span>
+        </button>
       </div>
       <div class="hint" id="micMsgWrap"><span id="micMsg"></span></div>
     </div>
 
     <div class="field">
       <label data-i18n="auto_suggest_label">Auto-suggest recording when a meeting is detected</label>
-      <div class="row"><span style="font-size:.9rem;color:#cbd5e1" data-i18n="auto_suggest_sub">Show a "Record this meeting?" prompt</span>
+      <div class="row"><span style="font-size:.9rem;color:var(--text-sec)" data-i18n="auto_suggest_sub">Show a "Record this meeting?" prompt</span>
         <label class="switch"><input type="checkbox" id="autoSuggest"><span class="slider"></span></label></div>
     </div>
 
     <div class="field">
       <label data-i18n="consent_note_label">Add a consent / recording note to the notes</label>
-      <div class="row"><span style="font-size:.9rem;color:#cbd5e1" data-i18n="consent_note_sub">Append "recorded with an AI notetaker" to saved/emailed notes</span>
+      <div class="row"><span style="font-size:.9rem;color:var(--text-sec)" data-i18n="consent_note_sub">Append "recorded with an AI notetaker" to saved/emailed notes</span>
         <label class="switch"><input type="checkbox" id="consentNote"><span class="slider"></span></label></div>
     </div>
 
@@ -253,26 +340,50 @@
 
     <div class="field">
       <label data-i18n="send_notes_auto">Send notes automatically after meeting ends</label>
-      <div class="row"><span style="font-size:.9rem;color:#cbd5e1">Auto-send via Gmail compose</span>
+      <div class="row"><span style="font-size:.9rem;color:var(--text-sec)">Auto-send via Gmail compose</span>
         <label class="switch"><input type="checkbox" id="autoEmail"><span class="slider"></span></label></div>
     </div>
 
     <div class="field">
       <label>Meeting history backup</label>
       <div class="row">
-        <span style="font-size:.9rem;color:#cbd5e1">Move your meetings + notes between installs</span>
-        <span>
-          <button class="btn ghost" id="exportBtn">⬇ Export</button>
-          <button class="btn ghost" id="importBtn">⬆ Import</button>
+        <span style="font-size:.9rem;color:var(--text-sec)">Move your meetings + notes between installs</span>
+        <span style="display:flex;gap:6px">
+          <button class="btn ghost" id="exportBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+          <button class="btn ghost" id="importBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import
+          </button>
           <input type="file" id="importFile" accept="application/json" style="display:none">
         </span>
       </div>
       <div class="hint" id="backupMsg">Exports titles, dates, notes and transcripts as one JSON file.</div>
     </div>
 
-    <button class="btn" id="save">Save settings</button>
-    <span id="saved">✓ Saved</span>
+    <div style="display:flex;align-items:center;margin-top:28px">
+      <button class="btn" id="save">Save settings</button>
+      <span id="saved">✓ Saved</span>
+    </div>
   </div>
+
+  <!-- Reusable Custom Modal (Confirm / Prompt) -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-card">
+      <div class="modal-title" id="modalTitle"></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div id="modalInputWrap" style="display:none">
+        <input type="text" class="modal-input" id="modalInput">
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="modalCancelBtn">Cancelar</button>
+        <button class="btn" id="modalConfirmBtn">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="i18n.js"></script>
   <script src="templates.js"></script>
   <script src="options.js"></script>

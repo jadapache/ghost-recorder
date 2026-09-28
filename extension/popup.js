@@ -6,11 +6,69 @@ const videoToggle = document.getElementById('videoToggle');
 const modeSelect = document.getElementById('modeSelect');
 const dashLink = document.getElementById('dashLink');
 const settingsLink = document.getElementById('settingsLink');
+const openSettingsBtn = document.getElementById('openSettingsBtn');
+const langPillBtn = document.getElementById('langPillBtn');
+const langPillBadge = document.getElementById('langPillBadge');
+const videoPillBtn = document.getElementById('videoPillBtn');
+const videoPillIcon = document.getElementById('videoPillIcon');
+const meetingsPillBtn = document.getElementById('meetingsPillBtn');
 
 let timerInterval = null;
 
-dashLink.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') }); };
-settingsLink.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); };
+if (dashLink) dashLink.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') }); };
+if (settingsLink) settingsLink.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); };
+if (openSettingsBtn) openSettingsBtn.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('options.html') }); };
+if (meetingsPillBtn) meetingsPillBtn.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') }); };
+
+function updateVideoPillUI(enabled) {
+  if (!videoPillIcon) return;
+  if (enabled) {
+    videoPillIcon.style.color = '#2563eb';
+    videoPillIcon.style.borderColor = '#bfdbfe';
+    videoPillIcon.style.background = '#eff6ff';
+    videoPillIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>`;
+  } else {
+    videoPillIcon.style.color = '#64748b';
+    videoPillIcon.style.borderColor = '#e2e8f0';
+    videoPillIcon.style.background = '#f8fafc';
+    videoPillIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16-1.5-1.5"/><path d="m2 2 20 20"/><path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 1.95-1.57"/><path d="M16 11.5V8a2 2 0 0 0-2-2h-3.5"/><path d="m22 8-6 4 6 4V8Z"/></svg>`;
+  }
+}
+
+function updateLangPillUI(lang) {
+  if (!langPillBadge) return;
+  const current = (lang || (self.GhostI18n ? self.GhostI18n.getLanguage() : 'en')).toUpperCase();
+  langPillBadge.textContent = current === 'AUTO' ? 'EN' : current;
+}
+
+if (videoPillBtn) {
+  videoPillBtn.onclick = (e) => {
+    e.preventDefault();
+    videoToggle.checked = !videoToggle.checked;
+    updateVideoPillUI(videoToggle.checked);
+    chrome.storage.local.get('settings', ({ settings }) => {
+      chrome.storage.local.set({ settings: Object.assign({ videoEnabled: true }, settings || {}, { videoEnabled: videoToggle.checked }) });
+    });
+  };
+}
+
+if (langPillBtn) {
+  langPillBtn.onclick = (e) => {
+    e.preventDefault();
+    chrome.storage.local.get('settings', ({ settings }) => {
+      const currentLang = (settings && settings.language) || (self.GhostI18n ? self.GhostI18n.getLanguage() : 'en');
+      const nextLang = currentLang === 'es' ? 'en' : 'es';
+      const newSettings = Object.assign({}, settings || {}, { language: nextLang });
+      chrome.storage.local.set({ settings: newSettings }, () => {
+        if (self.GhostI18n) {
+          self.GhostI18n.setLanguage(nextLang);
+          self.GhostI18n.translatePage();
+        }
+        updateLangPillUI(nextLang);
+      });
+    });
+  };
+}
 
 // Mic status — your voice is recorded in Call Mode if mic is granted.
 const micStatus = document.getElementById('micStatus');
@@ -65,11 +123,14 @@ chrome.storage.local.get(['isRecording', 'startTime', 'settings'], (result) => {
     }
   }
   videoToggle.checked = (s.videoEnabled !== false);
+  updateVideoPillUI(videoToggle.checked);
+  updateLangPillUI(s.language || 'en');
   if (modeSelect) modeSelect.value = s.recordMode || 'call';
   updateMicNotice();
 });
 
 videoToggle.addEventListener('change', () => {
+  updateVideoPillUI(videoToggle.checked);
   chrome.storage.local.get('settings', ({ settings }) => {
     chrome.storage.local.set({ settings: Object.assign({ videoEnabled: true }, settings || {}, { videoEnabled: videoToggle.checked }) });
   });

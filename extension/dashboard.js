@@ -318,7 +318,7 @@ function render() {
     <!-- Left Column: Back button, Video Preview & Summary/Resume Below -->
     <div class="mv-left">
       <div class="back-bar">
-        <button class="btn ghost mini" id="backToGridBtn">← Back to meetings</button>
+        <button class="btn ghost mini" id="backToGridBtn" data-i18n="back_to_meetings">← Back to meetings</button>
       </div>
 
       <div id="player"></div>
@@ -326,8 +326,8 @@ function render() {
       <div class="mtg-title-row">
         <h1 class="mtg-title">${esc(m.title || m.id)}</h1>
         <div class="mtg-title-actions">
-          <button class="btn-icon" id="renameBtn" title="Rename meeting">✎</button>
-          <button class="btn-icon" id="deleteBtn" title="Delete recording">🗑</button>
+          <button class="btn-icon" id="renameBtn" title="Rename meeting"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+          <button class="btn-icon" id="deleteBtn" title="Delete recording"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
         </div>
       </div>
 
@@ -337,17 +337,17 @@ function render() {
 
       <div class="tpl-bar">
         <div class="tpl-pill">
-          <span class="tpl-label">Template:</span>
+          <span class="tpl-label" data-i18n="template_label">Template:</span>
           <select id="tplSelect" class="tpl-select">
             ${tplOptsHtml}
           </select>
         </div>
         <div class="tpl-actions">
-          <button class="btn-icon" id="formatToggleBtn" title="Toggle bullet formatting">≡</button>
-          <button class="btn-icon" id="copySumBtn" title="Copy summary">⧉</button>
-          <button class="btn-icon" id="emailSumBtn" title="Email notes">✉</button>
-          ${(m.files && (m.files.video || m.files.audio || m.files.notes || m.files.vtt || m.files.transcript)) ? `<button class="btn-icon" id="folderBtn" title="Show files in folder">📁</button>` : ''}
-          ${m.state === 'error' ? `<button class="btn retry mini" id="retryAiBtn">↻ Retry AI</button>` : ''}
+          <button class="btn-icon" id="formatToggleBtn" title="Toggle bullet formatting"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+          <button class="btn-icon" id="copySumBtn" title="Copy summary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          <button class="btn-icon" id="emailSumBtn" title="Email notes"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></button>
+          ${(m.files && (m.files.video || m.files.audio || m.files.notes || m.files.vtt || m.files.transcript)) ? `<button class="btn-icon" id="folderBtn" title="Show files in folder"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>` : ''}
+          ${m.state === 'error' ? `<button class="btn retry mini" id="retryAiBtn" data-i18n="retry_ai">↻ Retry AI</button>` : ''}
         </div>
       </div>
 
@@ -360,9 +360,9 @@ function render() {
     <!-- Right Column: Navigation Tabs & Feed -->
     <div class="mv-right">
       <div class="rtabs">
-        <button class="rtab ${rightTab === 'transcript' ? 'active' : ''}" data-tab="transcript">Transcript</button>
-        <button class="rtab ${rightTab === 'insights' ? 'active' : ''}" data-tab="insights">Insights</button>
-        <button class="rtab ${rightTab === 'chat' ? 'active' : ''}" data-tab="chat">AI chat</button>
+        <button class="rtab ${rightTab === 'transcript' ? 'active' : ''}" data-tab="transcript" data-i18n="tab_transcript">Transcript</button>
+        <button class="rtab ${rightTab === 'insights' ? 'active' : ''}" data-tab="insights" data-i18n="tab_insights">Insights</button>
+        <button class="rtab ${rightTab === 'chat' ? 'active' : ''}" data-tab="chat" data-i18n="tab_ai_chat">AI chat</button>
       </div>
       <div id="rightTabContent"></div>
     </div>`;
@@ -378,6 +378,7 @@ function render() {
   setupLeftColumnActions(m);
   renderRightContent(m);
   attachMedia(m);
+  if (self.GhostI18n) self.GhostI18n.translatePage(document.body);
 }
 
 // Render Left Panel Resume / Notes Block
@@ -632,9 +633,10 @@ async function renderTranscriptPane(m, container) {
 
   if (!transcript) {
     container.innerHTML = `
-      <div class="empty" style="margin-top:40px">
+      <div class="empty" style="margin-top:40px" data-i18n="no_transcript_yet">
         No transcript yet${m.state === 'processing' ? ' — AI is still working.' : '.'}
       </div>`;
+    if (self.GhostI18n) self.GhostI18n.translatePage(container);
     return;
   }
 
@@ -643,18 +645,18 @@ async function renderTranscriptPane(m, container) {
   container.innerHTML = `
     <div class="tr-tools">
       <div class="tr-search-wrap">
-        <input type="text" class="tr-search-input" id="trSearchInput" placeholder="Search transcript" value="${esc(transcriptSearchQ)}">
-        <span class="tr-search-icon">🔍</span>
+        <input type="text" class="tr-search-input" id="trSearchInput" placeholder="Search transcript" data-i18n="search_transcript" value="${esc(transcriptSearchQ)}">
+        <span class="tr-search-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
       </div>
       <select class="tr-lang-select" id="trLangSelect">
-        <option value="es" ${transcriptLang === 'es' ? 'selected' : ''}>Spanish ▾</option>
+        <option value="es" ${transcriptLang === 'es' ? 'selected' : ''}>Español ▾</option>
         <option value="en" ${transcriptLang === 'en' ? 'selected' : ''}>English ▾</option>
         <option value="auto" ${transcriptLang === 'auto' ? 'selected' : ''}>Auto ▾</option>
-        <option value="fr" ${transcriptLang === 'fr' ? 'selected' : ''}>French ▾</option>
-        <option value="de" ${transcriptLang === 'de' ? 'selected' : ''}>German ▾</option>
-        <option value="pt" ${transcriptLang === 'pt' ? 'selected' : ''}>Portuguese ▾</option>
+        <option value="fr" ${transcriptLang === 'fr' ? 'selected' : ''}>Français ▾</option>
+        <option value="de" ${transcriptLang === 'de' ? 'selected' : ''}>Deutsch ▾</option>
+        <option value="pt" ${transcriptLang === 'pt' ? 'selected' : ''}>Português ▾</option>
       </select>
-      <button class="btn-icon" id="copyTrBtn" title="Copy transcript">⧉</button>
+      <button class="btn-icon" id="copyTrBtn" title="Copy transcript"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       <button class="btn ghost mini" id="dlTxtTr" title="Download .txt">.txt</button>
       <button class="btn ghost mini" id="dlVttTr" title="Download subtitles">.vtt</button>
     </div>
@@ -662,6 +664,8 @@ async function renderTranscriptPane(m, container) {
     <div class="transcript-feed" id="transcriptFeed">
       ${buildTurnsHtml(transcript, transcriptSearchQ)}
     </div>`;
+
+  if (self.GhostI18n) self.GhostI18n.translatePage(container);
 
   const sIn = document.getElementById('trSearchInput');
   if (sIn) {
@@ -823,17 +827,17 @@ function renderInsightsPane(m, container) {
   container.innerHTML = `
     <div class="insights-pane">
       <div class="insight-card">
-        <div class="insight-header">📌 Action Items</div>
+        <div class="insight-header"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span data-i18n="action_items">Action Items</span></div>
         ${actionItems.length ? actionItems.map((item, idx) => `
           <div class="action-row ${item.done ? 'done' : ''}" data-idx="${idx}">
             <input type="checkbox" ${item.done ? 'checked' : ''}>
             <span>${esc(item.text)}</span>
-          </div>`).join('') : '<div class="muted">No action items detected in notes.</div>'}
+          </div>`).join('') : '<div class="muted" data-i18n="no_action_items">No action items detected in notes.</div>'}
       </div>
 
       ${decisions.length ? `
       <div class="insight-card">
-        <div class="insight-header">⚖ Decisions</div>
+        <div class="insight-header"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg><span data-i18n="decisions">Decisions</span></div>
         <ul style="margin:0;padding-left:20px">
           ${decisions.map((d) => `<li style="margin-bottom:6px">${esc(d)}</li>`).join('')}
         </ul>
@@ -841,7 +845,7 @@ function renderInsightsPane(m, container) {
 
       ${keyPoints.length ? `
       <div class="insight-card">
-        <div class="insight-header">💡 Key Takeaways</div>
+        <div class="insight-header"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg><span data-i18n="key_takeaways">Key Takeaways</span></div>
         <ul style="margin:0;padding-left:20px">
           ${keyPoints.map((k) => `<li style="margin-bottom:6px">${esc(k)}</li>`).join('')}
         </ul>
@@ -849,12 +853,14 @@ function renderInsightsPane(m, container) {
 
       ${att.length ? `
       <div class="insight-card">
-        <div class="insight-header">👥 Participants</div>
+        <div class="insight-header"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span data-i18n="participants">Participants</span></div>
         <div class="attend-list">
           ${att.map((a) => `<span class="attend-chip">${esc(a)}</span>`).join('')}
         </div>
       </div>` : ''}
     </div>`;
+
+  if (self.GhostI18n) self.GhostI18n.translatePage(container);
 
   container.querySelectorAll('.action-row').forEach((row) => {
     const chk = row.querySelector('input[type=checkbox]');
@@ -865,10 +871,17 @@ function renderInsightsPane(m, container) {
 }
 
 // ---- AI Chat Tab ----
-const CHIPS = {
-  meeting: ['Summarize this meeting', 'Extract all action items', 'What questions were asked?', 'What did I commit to?'],
-  all: ['Summarize my recent meetings', 'Things I promised to do', 'What decisions were made this week?', 'Surprise me with an insight'],
+const CHIPS_I18N = {
+  meeting: {
+    en: ['Summarize this meeting', 'Extract all action items', 'What questions were asked?', 'What did I commit to?'],
+    es: ['Resumir esta reunión', 'Extraer tareas pendientes', '¿Qué preguntas se hicieron?', '¿A qué me comprometí?']
+  },
+  all: {
+    en: ['Summarize my recent meetings', 'Things I promised to do', 'What decisions were made this week?', 'Surprise me with an insight'],
+    es: ['Resumir mis reuniones recientes', 'Tareas a las que me comprometí', '¿Qué decisiones se tomaron esta semana?', 'Sorpréndeme con un dato clave']
+  }
 };
+const CHIPS = CHIPS_I18N;
 function askContext(scope, m) {
   if (scope === 'meeting' && m && m.notes) {
     return `Meeting: "${m.title}" — ${localDate(m.date)}${m.duration ? ' · ' + m.duration : ''} · ${m.platform || ''}\n\n${m.notes}`.slice(0, 120000);
@@ -888,25 +901,29 @@ function renderChatPane(m, container) {
   chats.scope = scope;
   const key = scope === 'all' ? '::all' : m.id;
   const hist = chats[key] || (chats[key] = []);
+  const lang = (self.GhostI18n && self.GhostI18n.getLanguage ? self.GhostI18n.getLanguage() : 'en');
+  const chipList = (CHIPS_I18N[scope] && (CHIPS_I18N[scope][lang] || CHIPS_I18N[scope].en)) || CHIPS_I18N[scope].en;
 
   container.innerHTML = `
     <div class="chat-pane">
       <div class="askhead">
-        <span class="muted" style="font-size:.82rem">Ask about:</span>
-        <button class="btn ghost mini ${scope === 'meeting' ? 'btn' : ''}" id="scM" ${!m || !m.notes ? 'disabled' : ''}>This meeting</button>
-        <button class="btn ghost mini ${scope === 'all' ? 'btn' : ''}" id="scA">All meetings</button>
+        <span class="muted" style="font-size:.82rem" data-i18n="ask_about">Ask about:</span>
+        <button class="btn ghost mini ${scope === 'meeting' ? 'btn' : ''}" id="scM" ${!m || !m.notes ? 'disabled' : ''} data-i18n="this_meeting">This meeting</button>
+        <button class="btn ghost mini ${scope === 'all' ? 'btn' : ''}" id="scA" data-i18n="all_meetings">All meetings</button>
       </div>
       <div class="chat" id="chat">
         ${hist.length ? hist.map((h) => `<div class="msg ${h.role === 'user' ? 'u' : 'a'}">${h.role === 'user' ? esc(h.text) : renderMarkdown(h.text)}</div>`).join('')
-        : `<div class="empty" style="margin:40px 0">Hi — what can I tell you about ${scope === 'all' ? 'your meetings' : 'this meeting'}?</div>`}
-        ${askBusy ? '<div class="msg a"><span class="spinner" style="border-color:rgba(0,0,0,.15);border-top-color:var(--acc);"></span> Thinking…</div>' : ''}
+        : `<div class="empty" style="margin:40px 0" data-i18n="${scope === 'all' ? 'chat_empty_all' : 'chat_empty_meeting'}">Hi — what can I tell you about ${scope === 'all' ? 'your meetings' : 'this meeting'}?</div>`}
+        ${askBusy ? '<div class="msg a"><span class="spinner" style="border-color:rgba(0,0,0,.15);border-top-color:var(--acc);"></span> <span data-i18n="thinking">Thinking…</span></div>' : ''}
       </div>
-      <div class="chips">${CHIPS[scope].map((c) => `<button class="chipbtn" data-q="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+      <div class="chips">${chipList.map((c) => `<button class="chipbtn" data-q="${esc(c)}">${esc(c)}</button>`).join('')}</div>
       <div class="askrow">
-        <input id="askIn" placeholder="Ask anything…" ${askBusy ? 'disabled' : ''}>
+        <input id="askIn" placeholder="Ask anything…" data-i18n="ask_placeholder" ${askBusy ? 'disabled' : ''}>
         <button class="btn" id="askGo" ${askBusy ? 'disabled' : ''}>↑</button>
       </div>
     </div>`;
+
+  if (self.GhostI18n) self.GhostI18n.translatePage(container);
 
   const chatEl = document.getElementById('chat');
   if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
@@ -1031,26 +1048,27 @@ function renderHome(detail) {
   const done = meetings.filter((x) => x.state === 'done').length;
   const week = meetings.filter((x) => Date.now() - new Date(x.date).getTime() < 7 * 864e5).length;
   detail.innerHTML = `
-    <h2 class="title" style="font-size:1.35rem;font-weight:700;margin-bottom:16px">🏠 Home</h2>
+    <h2 class="title" style="font-size:1.35rem;font-weight:700;margin-bottom:16px"><span data-i18n="home">Home</span></h2>
     <div class="homegrid">
-      <div class="stat"><div class="n">${meetings.length}</div><div class="l">meetings recorded</div></div>
-      <div class="stat"><div class="n">${done}</div><div class="l">with AI notes</div></div>
-      <div class="stat"><div class="n">${week}</div><div class="l">in the last 7 days</div></div>
+      <div class="stat"><div class="n">${meetings.length}</div><div class="l" data-i18n="meetings_recorded">meetings recorded</div></div>
+      <div class="stat"><div class="n">${done}</div><div class="l" data-i18n="with_ai_notes">with AI notes</div></div>
+      <div class="stat"><div class="n">${week}</div><div class="l" data-i18n="last_7_days">in the last 7 days</div></div>
     </div>
     <div class="livecard">
       <div>
-        <div style="font-weight:700">🎙 In-person meeting</div>
-        <div class="muted" style="margin-top:3px">Record the room through your mic — live transcript while you talk, AI notes at the end.</div>
+        <div style="font-weight:700" data-i18n="in_person_meeting">🎙 In-person meeting</div>
+        <div class="muted" style="margin-top:3px" data-i18n="in_person_desc">Record the room through your mic — live transcript while you talk, AI notes at the end.</div>
       </div>
-      <button class="btn" id="offlineBtn" style="background:#dc2626">● Start recording</button>
+      <button class="btn" id="offlineBtn" style="background:#dc2626" data-i18n="start_in_person_rec">● Start recording</button>
     </div>
-    <h2 class="title" style="font-size:1.05rem;margin-top:28px;margin-bottom:14px;font-weight:700">✨ Ask AI — across all your meetings</h2>
+    <h2 class="title" style="font-size:1.05rem;margin-top:28px;margin-bottom:14px;font-weight:700" data-i18n="ask_ai_across_meetings">✨ Ask AI — across all your meetings</h2>
     <div id="homeAskPane"></div>`;
 
   const offBtn = document.getElementById('offlineBtn');
   if (offBtn) offBtn.onclick = startOffline;
   chats.scope = 'all';
   renderChatPane(null, document.getElementById('homeAskPane'));
+  if (self.GhostI18n) self.GhostI18n.translatePage(document.body);
 }
 
 // Meetings Grid View (Matches Reference Image 2)
@@ -1124,12 +1142,12 @@ function renderMeetingsGrid(detail) {
     <div class="grid-container">
       <div class="grid-search">
         <span class="grid-search-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
-        <input type="text" id="gridSearchInput" placeholder="Search for a keyword or phrase" value="${esc(searchQ)}">
+        <input type="text" id="gridSearchInput" placeholder="Search for a keyword or phrase" data-i18n="search_grid_placeholder" value="${esc(searchQ)}">
       </div>
 
-      <h1 class="grid-page-title">Meetings</h1>
+      <h1 class="grid-page-title" data-i18n="meetings">Meetings</h1>
       <div class="grid-section-label">
-        <span>Recent recordings</span>
+        <span data-i18n="recent_recordings">Recent recordings</span>
         <span style="opacity:.4">></span>
       </div>
 
@@ -1148,6 +1166,7 @@ function renderMeetingsGrid(detail) {
 
   attachGridCardListeners(detail);
   autoGenerateGridThumbnails(visible);
+  if (self.GhostI18n) self.GhostI18n.translatePage(document.body);
 }
 
 function updateGridSearchOnly() {

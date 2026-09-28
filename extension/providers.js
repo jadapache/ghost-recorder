@@ -2,11 +2,20 @@
 // Turns recorded audio (+ scraped captions) into templated markdown notes.
 // Providers: Gemini (native audio), Groq (Whisper -> chat), OpenRouter, Local (llama.cpp / Faster-Whisper), Chrome AI, Custom.
 
+function normalizeGeminiModel(model) {
+  if (!model || typeof model !== 'string') return 'gemini-2.5-flash';
+  const m = model.trim().toLowerCase();
+  if (/^gemini-(?:3|4)/i.test(m) || m.includes('3.1') || m.includes('3.5')) return 'gemini-2.5-flash';
+  if (m === 'gemini-flash') return 'gemini-2.5-flash';
+  if (m === 'gemini-pro') return 'gemini-2.5-pro';
+  return m;
+}
+
 (function () {
   const GEMINI_BASE = 'https://generativelanguage.googleapis.com';
   const GEMINI_INLINE_MAX = 14 * 1024 * 1024;
   const GROQ_STT_MAX = 24 * 1024 * 1024;
-  const GEMINI_FALLBACKS = ['gemini-3.1-flash-lite', 'gemini-3.1-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  const GEMINI_FALLBACKS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro'];
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -157,7 +166,7 @@
   async function geminiRun(audioBlob, captions, settings, tmpl, meta) {
     const apiKey = (settings.keys && settings.keys.gemini || '').trim();
     if (!apiKey) throw new Error('No Gemini API key set — open Settings.');
-    const preferred = (settings.models && settings.models.gemini) || 'gemini-3.1-flash-lite';
+    const preferred = normalizeGeminiModel((settings.models && settings.models.gemini) || 'gemini-2.5-flash');
     const chain = [preferred].concat(GEMINI_FALLBACKS).filter((m, i, a) => a.indexOf(m) === i);
 
     const promptText = tmpl.systemPrompt(meta, { includeTranscript: true, language: settings.language }) +

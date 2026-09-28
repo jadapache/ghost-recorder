@@ -8,7 +8,7 @@ const UNRECORDABLE = /^(chrome|edge|about|devtools|view-source|chrome-extension)
 const SETTINGS_DEFAULTS = {
   provider: 'gemini',
   keys: { gemini: '', groq: '', openrouter: '', custom: '', local: '' },
-  models: { gemini: 'gemini-3.1-flash-lite', groq: 'llama-3.3-70b-versatile', openrouter: 'google/gemini-2.5-flash', custom: '', local: 'llama3.2:latest', chrome_ai: 'gemini-nano' },
+  models: { gemini: 'gemini-2.5-flash', groq: 'llama-3.3-70b-versatile', openrouter: 'google/gemini-2.5-flash', custom: '', local: 'llama3.2:latest', chrome_ai: 'gemini-nano' },
   groqWhisper: 'whisper-large-v3-turbo',
   customBaseUrl: '',
   localBaseUrl: 'http://localhost:11434/v1',

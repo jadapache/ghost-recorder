@@ -1,90 +1,334 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title data-i18n="app_name">Ghost Recorder</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            width: 330px; margin: 0; padding: 0;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(160deg, #0b1220 0%, #111a2e 100%);
-            color: #e2e8f0;
-        }
-        .head { display: flex; align-items: center; gap: 10px; padding: 16px 18px 12px; }
-        .logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #38bdf8, #6366f1);
-            display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        .head h1 { font-size: 1.05rem; margin: 0; letter-spacing: .2px; }
-        .head .sub { font-size: .7rem; color: #64748b; margin-top: 1px; }
-        .body { padding: 0 18px 16px; display: flex; flex-direction: column; gap: 10px; }
-        .card { background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 11px 14px; }
-        .toggle-row { display: flex; justify-content: space-between; align-items: center; }
-        .toggle-row label { font-size: .85rem; color: #cbd5e1; }
-        .switch { position: relative; width: 42px; height: 23px; flex: none; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; inset: 0; background: #334155; border-radius: 23px; cursor: pointer; transition: .25s; }
-        .slider:before { content: ""; position: absolute; height: 17px; width: 17px; left: 3px; bottom: 3px;
-            background: #fff; border-radius: 50%; transition: .25s; }
-        input:checked + .slider { background: #2563eb; }
-        input:checked + .slider:before { transform: translateX(19px); }
-        select { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 8px; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; font-size: .82rem; }
-        .btn { padding: 13px; border: none; border-radius: 10px; font-weight: 700; font-size: .95rem; cursor: pointer; transition: .2s; width: 100%; }
-        .btn-start { background: linear-gradient(135deg, #2563eb, #4f46e5); color: #fff; }
-        .btn-start:hover { filter: brightness(1.12); box-shadow: 0 4px 18px rgba(59,99,235,.35); }
-        .btn-start:disabled { opacity: .45; cursor: default; box-shadow: none; }
-        .btn-stop { background: #dc2626; color: #fff; display: none; }
-        .btn-stop:hover { background: #b91c1c; }
-        .status { font-size: .8rem; color: #94a3b8; text-align: center; line-height: 1.45; }
-        .status a { color: #38bdf8; text-decoration: none; }
-        #tabInfo { font-size: .74rem; color: #7c93b5; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .timer { font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #38bdf8; display: none; text-align: center; margin: 2px 0; }
-        .links { display: flex; border-top: 1px solid rgba(255,255,255,.07); }
-        .links a { flex: 1; text-align: center; padding: 11px 0; font-size: .8rem; color: #94a3b8; text-decoration: none; font-weight: 600; }
-        .links a:hover { color: #38bdf8; background: rgba(255,255,255,.03); }
-        .links a + a { border-left: 1px solid rgba(255,255,255,.07); }
-        .pulse { display: inline-block; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; margin-right: 6px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.6);} 70% { box-shadow: 0 0 0 8px rgba(239,68,68,0);} 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0);} }
-    </style>
+  <meta charset="utf-8">
+  <title data-i18n="app_name">Ghost Recorder</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #ffffff;
+      --card-bg: #ffffff;
+      --line: #e2e8f0;
+      --line-subtle: #f8fafc;
+      --text: #0f172a;
+      --text-sec: #334155;
+      --text-muted: #64748b;
+      --acc: #2563eb;
+      --acc-hover: #1d4ed8;
+      --acc-light: #eff6ff;
+      --acc-border: #bfdbfe;
+      --danger: #dc2626;
+    }
+    body {
+      width: 340px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Header Bar */
+    .popup-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .popup-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex: none;
+      box-shadow: 0 2px 6px rgba(56,189,248,0.25);
+    }
+    .popup-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -.2px;
+      color: var(--text);
+    }
+    .popup-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .popup-head-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s, color .15s;
+    }
+    .popup-head-btn:hover {
+      background: var(--line-subtle);
+      color: var(--text);
+    }
+
+    /* Status Card (Top Rounded Card - 12px) */
+    .status-box {
+      background: var(--card-bg);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .status-icon-wrap {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--acc);
+      flex: none;
+    }
+    .status-info {
+      overflow: hidden;
+      flex: 1;
+    }
+    .status-heading {
+      font-weight: 700;
+      font-size: .95rem;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .tab-text {
+      font-size: .76rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Input & Selector Fields (12px) */
+    .field-card {
+      background: var(--card-bg);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .field-icon {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+    }
+    .field-select {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-weight: 600;
+      font-size: .88rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .mic-info-text {
+      font-size: .78rem;
+      color: var(--text-muted);
+      flex: 1;
+      line-height: 1.35;
+    }
+
+    /* Timer & Status */
+    .timer {
+      font-size: 1.85rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--acc);
+      display: none;
+      text-align: center;
+      margin: 2px 0;
+    }
+    .status-msg {
+      font-size: .82rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.4;
+      margin-top: 2px;
+    }
+    .status-msg a {
+      color: var(--acc);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    /* Primary Action Buttons (12px) */
+    .btn-primary {
+      background: var(--acc);
+      color: #ffffff;
+      border: none;
+      width: 100%;
+      padding: 13px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: .98rem;
+      cursor: pointer;
+      transition: background .15s, box-shadow .15s;
+      box-shadow: 0 4px 14px rgba(37,99,235,0.25);
+    }
+    .btn-primary:hover {
+      background: var(--acc-hover);
+      box-shadow: 0 6px 18px rgba(37,99,235,0.35);
+    }
+    .btn-primary:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .rec-row {
+      display: none;
+      gap: 10px;
+    }
+    .btn-pause {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      color: var(--text);
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: .9rem;
+      cursor: pointer;
+    }
+    .btn-stop {
+      background: var(--danger);
+      color: #ffffff;
+      flex: 2;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: .9rem;
+      cursor: pointer;
+    }
+
+    .pulse {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--danger);
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(220,38,38,.6); }
+      70% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+      100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+    }
+  </style>
 </head>
 <body>
-    <div class="head">
-        <div class="logo">👻</div>
-        <div>
-            <h1 data-i18n="app_name">Ghost Recorder</h1>
-            <div class="sub" data-i18n="popup_sub">AI meeting notes — any platform</div>
-        </div>
+  <!-- Header -->
+  <div class="popup-head">
+    <div class="popup-brand">
+      <div class="logo">👻</div>
+      <span class="popup-title" data-i18n="app_name">Ghost Recorder</span>
     </div>
-    <div class="body">
-        <div class="card" style="display:flex;flex-direction:column;gap:8px">
-            <div class="toggle-row">
-                <label data-i18n="record_video">Record video</label>
-                <label class="switch">
-                    <input type="checkbox" id="videoToggle" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div>
-                <select id="modeSelect">
-                    <option value="call" data-i18n="rec_mode_call">📞 Call Mode (Both sides)</option>
-                    <option value="system_only" data-i18n="rec_mode_system">🔊 System Audio Only (Webinar/Podcast)</option>
-                </select>
-            </div>
-        </div>
-        <div id="timer" class="timer">00:00</div>
-        <div id="tabInfo"></div>
-        <button id="startBtn" class="btn btn-start" data-i18n="start_recording">● Start Recording</button>
-        <div id="recRow" style="display:none;gap:8px">
-            <button id="pauseBtn" class="btn" style="flex:1;background:#334155;color:#fff" data-i18n="pause_recording">⏸ Pause</button>
-            <button id="stopBtn" class="btn btn-stop" style="flex:2;display:block" data-i18n="stop_recording">■ Stop</button>
-        </div>
-        <div id="statusText" class="status" data-i18n="ready_status">Ready to capture this meeting</div>
-        <div id="micStatus" class="status"></div>
+    <div class="popup-head-actions">
+      <!-- Meetings button moved to top right header next to 3-dots options button -->
+      <button class="popup-head-btn" id="meetingsPillBtn" title="Meetings" data-i18n-title="meetings">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </button>
+      <button class="popup-head-btn" id="openSettingsBtn" title="Settings" data-i18n-title="settings">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/>
+        </svg>
+      </button>
     </div>
-    <div class="links">
-        <a id="dashLink" href="#" data-i18n="meetings">📋 Meetings</a>
-        <a id="settingsLink" href="#" data-i18n="settings">⚙ Settings</a>
+  </div>
+
+  <!-- Status Box Card (Top Rounded Card - 12px) -->
+  <div class="status-box">
+    <div class="status-icon-wrap">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
     </div>
-    <script src="i18n.js"></script>
-    <script src="popup.js"></script>
+    <div class="status-info">
+      <div class="status-heading" data-i18n="recording_title">Recording</div>
+      <div class="tab-text" id="tabInfo">Checking tab…</div>
+    </div>
+  </div>
+
+  <!-- Mode Selector Card (12px) -->
+  <div class="field-card">
+    <div class="field-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="M6 8h12M6 12h12M6 16h8"/>
+      </svg>
+    </div>
+    <select id="modeSelect" class="field-select">
+      <option value="call" data-i18n="rec_mode_call">📞 Call Mode (Both sides)</option>
+      <option value="system_only" data-i18n="rec_mode_system">🔊 System Audio Only (Webinar/Podcast)</option>
+    </select>
+  </div>
+
+  <!-- Microphone Indicator Card (12px) -->
+  <div class="field-card">
+    <div class="mic-info-text" id="micStatus">Checking mic…</div>
+  </div>
+
+  <!-- Timer display -->
+  <div id="timer" class="timer">00:00</div>
+
+  <!-- Main Action Button (12px) -->
+  <button id="startBtn" class="btn-primary" data-i18n="start_recording">Start Capture</button>
+
+  <!-- Recording Controls Row -->
+  <div id="recRow" class="rec-row">
+    <button id="pauseBtn" class="btn-pause" data-i18n="pause_recording">⏸ Pause</button>
+    <button id="stopBtn" class="btn-stop" data-i18n="stop_recording">■ Stop</button>
+  </div>
+
+  <!-- Status Message Text -->
+  <div id="statusText" class="status-msg" data-i18n="ready_status">Ready to capture this meeting</div>
+
+  <!-- Hidden Video Toggle & Nav Links for backward compatibility -->
+  <input type="checkbox" id="videoToggle" style="display:none" checked>
+  <a id="dashLink" href="#" style="display:none"></a>
+  <a id="settingsLink" href="#" style="display:none"></a>
+
+  <script src="i18n.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>
